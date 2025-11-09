@@ -71,15 +71,20 @@ def display_copyright():
 #    sprite_width=32    # Copyright Width
 #    sprite_height=102  # Copyright Height
 
-#    rom_path = "./j6.6h"
-#    offset = 0x0B70  # Relative file offset for Genie Lamp Smart Bomb Marker
-#    sprite_width=32    # Genie Lamp Width
-#    sprite_height=14   # Genie Lamp Height
+    rom_path = "./j6.6h"
+    offset = 0x0B70  # Relative file offset for Genie Lamp/Smart Bomb Counter
+    sprite_width=32    # Genie Lamp Width
+    sprite_height=14   # Genie Lamp Height
 
-    rom_path = "./c6.6i"
-    offset = 0x0E00  # Relative file offset for Timer Banner
-    sprite_height = 24  # Calculated: (0xB6F - 0x8F0 + 1) / (32 / 2) = 688 / 16 = 43, but adjust for visible area
-    sprite_width = 500 // sprite_height  # Placeholder width, adjust based on graphic
+#    rom_path = "./j6.6h"
+#    offset = 0x05A0  # Relative file offset for Player Counter
+#    sprite_width=16    # Player Counter Width
+#    sprite_height=16  # Player Counter Height
+
+#    rom_path = "./c6.6i"
+#    offset = 0x0E00  # Relative file offset for Timer Banner
+#    sprite_height = 24  # Calculated: (0xB6F - 0x8F0 + 1) / (32 / 2) = 688 / 16 = 43, but adjust for visible area
+#    sprite_width = 500 // sprite_height  # Placeholder width, adjust based on graphic
 
     zoom_factor=10 
 

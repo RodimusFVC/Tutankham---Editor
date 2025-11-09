@@ -66,15 +66,15 @@ def apply_palette_to_sprite(sprite, palette):
 # Main display function
 def display_copyright():
 
-#    rom_path = "./j6.6h"
-#    offset = 0x05C0  # Relative file offset for Copyright
-#    sprite_width=32    # Copyright Width
-#    sprite_height=102  # Copyright Height
-
     rom_path = "./j6.6h"
-    offset = 0x0B70  # Relative file offset for Genie Lamp Smart Bomb Marker
-    sprite_width=32    # Genie Lamp Width
-    sprite_height=14   # Genie Lamp Height
+    offset = 0x05C0  # Relative file offset for Copyright
+    sprite_width=32    # Copyright Width
+    sprite_height=102  # Copyright Height
+
+#    rom_path = "./j6.6h"
+#    offset = 0x0B70  # Relative file offset for Genie Lamp Smart Bomb Marker
+#    sprite_width=32    # Genie Lamp Width
+#    sprite_height=14   # Genie Lamp Height
 
 #    rom_path = "./c6.6i"
 #    offset = 0x0E00  # Relative file offset for Timer Banner
@@ -89,13 +89,16 @@ def display_copyright():
     root = tk.Tk()
     root.title("Tutankham j6.6h Copyright Graphic")
 
-    canvas = tk.Canvas(root, width=sprite_width*zoom_factor, height=sprite_width*zoom_factor, bg="#2b2b2b")  # 32×4, 35×4
-    canvas.pack(pady=10)
+    canvas = tk.Canvas(root, width=sprite_height * zoom_factor, height=(sprite_width / 2) * zoom_factor, bg="#2b2b2b")  # 32×4, 35×4
+    canvas.pack(pady=10) 
 
     sprite = extract_sprite(rom_data, offset, width=sprite_width, height=sprite_height)
     sprite = np.rot90(sprite, k=1)  # Rotate 90° clockwise based on your note
     color_sprite = apply_palette_to_sprite(sprite, palette)
-    img = Image.fromarray(color_sprite[:, :, :3], "RGB").resize((sprite_width*zoom_factor, sprite_width*zoom_factor), Image.NEAREST)
+
+    rot_h, rot_w, _ = color_sprite.shape
+
+    img = Image.fromarray(color_sprite[:, :, :3], "RGB").resize((rot_w * zoom_factor, rot_h * zoom_factor), Image.NEAREST)
     photo = ImageTk.PhotoImage(img)
     canvas.create_image(0, 0, image=photo, anchor="nw")
     canvas.image_refs = [photo]  # Keep reference to avoid garbage collection
