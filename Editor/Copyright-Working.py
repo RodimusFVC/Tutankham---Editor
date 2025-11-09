@@ -16,14 +16,14 @@ def read_rom(filename):
         return bytearray(f.read())
 
 # Extract 4bpp sprite from full range (560 bytes)
-def extract_sprite(rom, offset, width=35, height=16):
+def extract_sprite(rom, offset, width=16, height=16):
     """
     Decodes 4bpp sprite with 16-byte blocks where:
       - bytes 0..7 -> even scanlines of the block
       - bytes 8..15 -> odd scanlines of the block
     Handles odd height by decoding the final single scanline if present.
     """
-    bytes_per_row = width // 2  # 16 for 32px width
+    bytes_per_row = width  # 16 for 32px width
     sprite = np.zeros((height, bytes_per_row), dtype=np.uint8)
 
     # Each pair of scanlines consumes 16 source bytes. Row-group index = y // 2
@@ -68,18 +68,8 @@ def display_copyright():
 
     rom_path = "./j6.6h"
     offset = 0x05C0  # Relative file offset for Copyright
-    sprite_width=32    # Copyright Width
-    sprite_height=102  # Copyright Height
-
-#    rom_path = "./j6.6h"
-#    offset = 0x0B70  # Relative file offset for Genie Lamp Smart Bomb Marker
-#    sprite_width=32    # Genie Lamp Width
-#    sprite_height=14   # Genie Lamp Height
-
-#    rom_path = "./c6.6i"
-#    offset = 0x0E00  # Relative file offset for Timer Banner
-#    sprite_height = 24  # Calculated: (0xB6F - 0x8F0 + 1) / (32 / 2) = 688 / 16 = 43, but adjust for visible area
-#    sprite_width = 500 // sprite_height  # Placeholder width, adjust based on graphic
+    sprite_width=102    # Copyright Width
+    sprite_height=16  # Copyright Height
 
     zoom_factor=10 
 
@@ -89,17 +79,16 @@ def display_copyright():
     root = tk.Tk()
     root.title("Tutankham j6.6h Copyright Graphic")
 
-    canvas = tk.Canvas(root, width=sprite_height * zoom_factor, height=(sprite_width / 2) * zoom_factor, bg="#2b2b2b")  # 32×4, 35×4
-    canvas.pack(pady=10) 
 
-    sprite = extract_sprite(rom_data, offset, width=sprite_width, height=sprite_height)
+    sprite = extract_sprite(rom_data, offset, width=sprite_height, height=sprite_width)
     sprite = np.rot90(sprite, k=1)  # Rotate 90° clockwise based on your note
     color_sprite = apply_palette_to_sprite(sprite, palette)
 
-    rot_h, rot_w, _ = color_sprite.shape
-
-    img = Image.fromarray(color_sprite[:, :, :3], "RGB").resize((rot_w * zoom_factor, rot_h * zoom_factor), Image.NEAREST)
+    img = Image.fromarray(color_sprite[:, :, :3], "RGB").resize((sprite_width * zoom_factor, sprite_height * zoom_factor), Image.NEAREST)
     photo = ImageTk.PhotoImage(img)
+
+    canvas = tk.Canvas(root, width=sprite_width * zoom_factor, height=(sprite_height) * zoom_factor, bg="#2b2b2b")
+    canvas.pack(pady=10) 
     canvas.create_image(0, 0, image=photo, anchor="nw")
     canvas.image_refs = [photo]  # Keep reference to avoid garbage collection
 
