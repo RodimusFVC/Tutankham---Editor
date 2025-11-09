@@ -382,7 +382,7 @@ def load_roms_from_zip():
 
         if not os.path.exists(zip_path):
             messagebox.showerror("Error", f"Zip file not found:\n{zip_path}")
-            return
+            sys.exit(1)
 
         with tempfile.TemporaryDirectory() as extract_dir:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
