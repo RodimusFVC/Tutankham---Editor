@@ -89,21 +89,24 @@ def apply_palette_to_sprite(sprite, palette):
     return color_sprite
 
 # Main display function
-def display_geniecounter():
+def display_treasures():
 
-    rom_path = "../j6.6h"
-    offset = 0x0B70  # Relative file offset for Genie Lamp/Smart Bomb Counter
-    sprite_width=16    # Genie Lamp Width
-    sprite_height=14   # Genie Lamp Height
-    zoom_factor=10 
+    rom_path = "../c9.9i"
+    offset = 0x0000  # Relative file offset for Treasure 1
+#    offset = 0x03DE  # Relative file offset for Treasure 2
+#    offset = 0x07BC  # Relative file offset for Treasure 3
+#    offset = 0x0B9A  # Relative file offset for Treasure 4
+    sprite_width= 44  # Treasure Width
+    sprite_height=44  # Treasure Height
+    zoom_factor = 10
 
     rom_data = read_rom(rom_path)
     if len(rom_data) != 4096:
         raise ValueError(f"Expected 4096 bytes in {rom_path}, got {len(rom_data)}")
     root = tk.Tk()
-    root.title("Tutankham j6.6h Genie Lamp Counter Graphic")
+    root.title("Tutankham j6.6h Treasure Graphics")
 
-    sprite = extract_pixels(rom_data, offset, height=sprite_height, width=sprite_width, mode='sprite', bytes_per_row=16)  # 16px = 16 bytes per row (even/odd interleaved)
+    sprite = extract_pixels(rom_data, offset, height=sprite_height, width=sprite_width, mode='sprite', bytes_per_row=44)  # 16px = 16 bytes per row (even/odd interleaved)
 
     sprite = np.rot90(sprite, k=1)  # Rotate 90° clockwise based on your note
     color_sprite = apply_palette_to_sprite(sprite, palette)
@@ -118,4 +121,4 @@ def display_geniecounter():
 
 # Run
 if __name__ == "__main__":
-    display_geniecounter()
+    display_treasures()
