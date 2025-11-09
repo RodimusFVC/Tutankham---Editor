@@ -2,9 +2,6 @@ import numpy as np
 from PIL import Image, ImageTk
 import tkinter as tk
 
-# ROM path
-rom_path = "./j6.6h"
-
 # Palette (from your editor, Map 1)
 palette = [
     (255, 0, 0, 0), (255, 0, 0, 148), (255, 0, 224, 0), (255, 133, 133, 148),
@@ -19,35 +16,35 @@ def read_rom(filename):
         return bytearray(f.read())
 
 # Extract 4bpp sprite from full range (560 bytes)
-def extract_sprite(rom, offset, width=100, height=16):
+def extract_sprite(rom, offset, width=35, height=16):
     """
     Decodes 4bpp sprite with 16-byte blocks where:
       - bytes 0..7 -> even scanlines of the block
       - bytes 8..15 -> odd scanlines of the block
     Handles odd height by decoding the final single scanline if present.
     """
-    sprite = np.zeros((height, width), dtype=np.uint8)
-    bytes_per_row = width // 2  # 50 for 100px width
-    block_height = 16  # bytes-per-block (8 even + 8 odd) -> covers 16 rows conceptually
+    bytes_per_row = width // 2  # 16 for 32px width
+    sprite = np.zeros((height, bytes_per_row), dtype=np.uint8)
+
     # Each pair of scanlines consumes 16 source bytes. Row-group index = y // 2
     for y in range(height):
         pair_index = y // 2
         # base of the 16-byte chunk for this pair of rows
-        base = offset + pair_index * bytes_per_row
-        # if y is even -> use bytes base+0..base+7 (even scanline)
-        # if y is odd -> use bytes base+8..base+15 (odd scanline)
+        base = offset + pair_index * (bytes_per_row)
+        # if y is even -> use bytes base+0..base+7  (even scanline)
+        # if y is odd  -> use bytes base+8..base+15 (odd scanline)
         half = 0 if (y % 2 == 0) else 8
-        for b in range(bytes_per_row // 2):  # 25 iterations -> 50 pixels
+
+        for b in range(bytes_per_row // 2):  # 8 iterations -> 16 pixels
             src_off = base + half + b
-            if src_off >= offset + 560:  # Limit to 0x05C0–0x08EF
+            if src_off >= len(rom):
                 val = 0
             else:
                 val = rom[src_off]
             x = b * 2
-            if x < width:
-                sprite[y, x] = val & 0x0F
-                if x + 1 < width:
-                    sprite[y, x + 1] = (val >> 4) & 0x0F
+            sprite[y, x]     = val & 0x0F
+            sprite[y, x + 1] = (val >> 4) & 0x0F
+
     return sprite
 
 # Apply palette to sprite
@@ -68,20 +65,40 @@ def apply_palette_to_sprite(sprite, palette):
 
 # Main display function
 def display_copyright():
+
+    rom_path = "./j6.6h"
+    offset = 0x05C0  # Relative file offset for Copyright
+    sprite_width=32    # Copyright Width
+    sprite_height=102  # Copyright Height
+
+#    rom_path = "./j6.6h"
+#    offset = 0x0B70  # Relative file offset for Genie Lamp Smart Bomb Marker
+#    sprite_width=32    # Genie Lamp Width
+#    sprite_height=14   # Genie Lamp Height
+
+#    rom_path = "./c6.6i"
+#    offset = 0x0E00  # Relative file offset for Timer Banner
+#    sprite_height = 24  # Calculated: (0xB6F - 0x8F0 + 1) / (32 / 2) = 688 / 16 = 43, but adjust for visible area
+#    sprite_width = 500 // sprite_height  # Placeholder width, adjust based on graphic
+
+    zoom_factor=10 
+
     rom_data = read_rom(rom_path)
     if len(rom_data) != 4096:
         raise ValueError(f"Expected 4096 bytes in {rom_path}, got {len(rom_data)}")
     root = tk.Tk()
     root.title("Tutankham j6.6h Copyright Graphic")
-    canvas = tk.Canvas(root, width=400, height=64, bg="#2b2b2b")  # 100×4, 16×4
-    canvas.pack(pady=10)
 
-    # Extract and display copyright sprite (0x05C0–0x08EF, 560 bytes)
-    offset = 0x05C0  # Relative file offset
-    sprite = extract_sprite(rom_data, offset, width=100, height=16)
-    sprite = np.rot90(sprite, k=1)  # Rotate 90° clockwise
+    canvas = tk.Canvas(root, width=sprite_height * zoom_factor, height=(sprite_width / 2) * zoom_factor, bg="#2b2b2b")  # 32×4, 35×4
+    canvas.pack(pady=10) 
+
+    sprite = extract_sprite(rom_data, offset, width=sprite_width, height=sprite_height)
+    sprite = np.rot90(sprite, k=1)  # Rotate 90° clockwise based on your note
     color_sprite = apply_palette_to_sprite(sprite, palette)
-    img = Image.fromarray(color_sprite[:, :, :3], "RGB").resize((400, 64), Image.NEAREST)  # 4x zoom
+
+    rot_h, rot_w, _ = color_sprite.shape
+
+    img = Image.fromarray(color_sprite[:, :, :3], "RGB").resize((rot_w * zoom_factor, rot_h * zoom_factor), Image.NEAREST)
     photo = ImageTk.PhotoImage(img)
     canvas.create_image(0, 0, image=photo, anchor="nw")
     canvas.image_refs = [photo]  # Keep reference to avoid garbage collection

@@ -92,7 +92,7 @@ def apply_palette_to_sprite(sprite, palette):
 # Main display function
 def display_copyright():
 
-    rom_path = "./j6.6h"
+    rom_path = "../j6.6h"
     offset = 0x05C0  # Relative file offset for Copyright
     sprite_width=102    # Copyright Width
     sprite_height=16  # Copyright Height

@@ -123,7 +123,7 @@ def apply_palette_to_sprite(sprite, palette):
 # Main display function
 def display_geniecounter():
 
-    rom_path = "./j6.6h"
+    rom_path = "../j6.6h"
     offset = 0x0B70  # Relative file offset for Genie Lamp/Smart Bomb Counter
     sprite_width=32    # Genie Lamp Width
     sprite_height=14   # Genie Lamp Height

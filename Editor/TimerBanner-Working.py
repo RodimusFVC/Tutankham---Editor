@@ -56,7 +56,7 @@ def apply_palette_to_sprite(sprite, palette):
 def display_timer_banner():
 
     # Timer Banner Graphic
-    rom_path = "./j6.6h"
+    rom_path = "../j6.6h"
     offset = 0x08F0  # Relative file offset for Timer Banner
     sprite_width = 32  # Placeholder width, adjust based on graphic
     sprite_height = 39  # Calculated: (0xB6F - 0x8F0 + 1) / (32 / 2) = 688 / 16 = 43, but adjust for visible area
