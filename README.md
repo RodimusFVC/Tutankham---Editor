@@ -12,7 +12,7 @@ ROM Analysis:
 Editor Development: 
   - Main development by Rodimus 
   - Primary development in collaboration with Claude (Anthropic) 
-  - Additional assistance from Grok (xAI) for copyright checksum discovery 
+  - Additional assistance from Grok (xAI) for copyright checksum implementation
   - Additional assistance from ChatGPT for general code fixes 
   - Python, NumPy, Tkinter, Pillow, Colorlog for implementation 
 

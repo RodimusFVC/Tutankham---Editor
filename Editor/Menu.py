@@ -1765,7 +1765,7 @@ def show_about():
         f"Editor Development:\n"
         f"- Main development by Rodimus\n"
         f"- Collaboration with Claude (Anthropic)\n"
-        f"- Assistance from Grok (xAI) for checksum discovery\n"
+        f"- Assistance from Grok (xAI) for checksum implementation\n"
         f"- Assistance from ChatGPT (OpenAI) for code fixes\n"
         f"- Implemented in Python using NumPy, Tkinter, Pillow, and Colorlog\n\n"
         f"Special Thanks:\n"
