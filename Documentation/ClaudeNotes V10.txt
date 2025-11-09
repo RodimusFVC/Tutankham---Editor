@@ -1,0 +1,1150 @@
+================================================================================
+TUTANKHAM MAP EDITOR - COMPLETE STATUS DOCUMENT V10
+================================================================================
+
+Last Updated: 10/22/2025
+Editor Version: V10
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+1. ROM File Structure
+2. Map Structure
+3. Object Data Structure (REVISED)
+4. Composite Objects
+5. Item/Treasure System
+6. Spawn/Respawn System
+7. Banking System
+8. Map Configuration Discovery (NEW!)
+9. Tile Palette Organization
+10. Implemented Features V10
+11. Known Issues
+12. Coordinate System Reference
+
+================================================================================
+ROM FILE STRUCTURE
+================================================================================
+
+Program ROMs (6809 CPU Code):
+- m1.1h: 0x0A000-0x0AFFF (4KB)
+- m2.2h: 0x0B000-0x0BFFF (4KB)
+- 3j.3h: 0x0C000-0x0CFFF (4KB) or 3a.3h (Stern Version)
+- m4.4h: 0x0D000-0x0DFFF (4KB)
+- m5.5h: 0x0E000-0x0EFFF (4KB)
+- j6.6h: 0x0F000-0x0FFFF (4KB) or j6.6h (Stern Version)
+
+Graphics ROMs (Banked at 0x9000-0x9FFF):
+- c1.1i: 0x10000-0x10FFF (Tiles 0-31, 32 tiles)
+- c2.2i: 0x11000-0x11FFF (Tiles 32-63, 32 tiles)
+- c3.3i: 0x12000-0x12FFF (Tiles 64-95, 32 tiles)
+- c4.4i: 0x13000-0x13FFF (Tiles 96-127, 32 tiles)
+- c5.5i: 0x14000-0x14FFF (Tiles 128-159, 32 tiles)
+- c6.6i: 0x15000-0x15FFF (Logical maps 1-2)
+- c7.7i: 0x16000-0x16FFF (Logical maps 3-4)
+- c8.8i: 0x17000-0x17FFF (Visual maps 1-4)
+- c9.9i: 0x18000-0x18FFF (Treasure end-of-level graphics)
+
+Memory Map (6809 CPU Address Space):
+0x0000-0x7FFF : Video RAM (32KB)
+0x8000-0x800F : Palette RAM (16 bytes, mirrored)
+0x8100-0x810F : Scroll register (mirrored)
+0x8120-0x812F : Watchdog reset (read, mirrored)
+0x8160-0x816F : DIP Switch 2 (mirrored)
+0x8180-0x818F : Input Port 0 - Coins/Service/Start buttons (mirrored)
+0x81A0-0x81AF : Input Port 1 - Player 1 controls (mirrored)
+0x81C0-0x81CF : Input Port 2 - Player 2 controls (mirrored)
+0x81E0-0x81EF : DIP Switch 1 (mirrored)
+0x8200-0x82FF : Output latches
+0x8300-0x83FF : Bank select register (write only, mirrored)
+0x8600-0x86FF : Sound enable (mirrored)
+0x8700-0x87FF : Sound data to audio CPU (mirrored)
+0x8800-0x8FFF : Work RAM (2KB)
+0x9000-0x9FFF : Banked ROM window (4KB, selected via 0x8300)
+0xA000-0xFFFF : Fixed program ROM (24KB)
+
+================================================================================
+MAP STRUCTURE
+================================================================================
+
+Map Dimensions:
+- 4 maps total
+- 12 rows × 64 columns
+- Maps stored rotated 90° in ROM
+- Visual Map Size: 0x300 bytes per map (768 bytes)
+- Logical Map Size: 0x700 bytes per map (1792 bytes)
+
+Coordinate System:
+- Origin: Bottom-left corner is (0, 0)
+- XX coordinate: Row position (0x00 to 0x58, increments of 0x08)
+- YYYY coordinate: Column position (0x0000 to 0x01F8, increments of 0x08)
+- Tile position calculation:
+  Row = XX / 0x08
+  Column = YYYY / 0x08
+- Array indexing: Top-left is (0,0), requires row flip for game coords
+
+Visual to Logical Mapping:
+- Visual column → Logical row
+- Visual row + 1 → Logical column (accounting for CC border)
+- Logical map layout: 64 rows × 14 columns (includes borders)
+
+Map Scroll Behavior:
+- Map 1: Artificially limited scroll distance (~50% of map width)
+- Maps 2-4: Full 64-column scrolling enabled
+- Scroll limit implementation: Location unknown, likely hardcoded in program ROM
+- Suspected limit value for Map 1: 0xC0 (192 decimal, ~half map)
+
+================================================================================
+OBJECT DATA STRUCTURE
+================================================================================
+
+
+
+
+J3 ROM (0xCxxx Block):
+
+Unknown Reference Table:
+| 3j.3h  | 0xC09A-0xC09B   | 2B    | Entry #01                       | C1 96                      |
+| 3j.3h  | 0xC09C-0xC09D   | 2B    | Entry #02                       | C1 BB                      |
+| 3j.3h  | 0xC09E-0xC09F   | 2B    | Entry #03                       | C1 D1                      |
+| 3j.3h  | 0xC0A0-0xC0A1   | 2B    | Entry #04                       | C1 F3                      |
+| 3j.3h  | 0xC0A2-0xC0A3   | 2B    | Entry #05                       | C2 09                      |
+| 3j.3h  | 0xC0A4-0xC0A5   | 2B    | Entry #06                       | C1 8B                      |
+| 3j.3h  | 0xC0A6-0xC0A7   | 2B    | Entry #07                       | C1 C6                      |
+| 3j.3h  | 0xC0A8-0xC0A9   | 2B    | Entry #08                       | C1 E2                      |
+| 3j.3h  | 0xC0AA-0xC0AB   | 2B    | Entry #09                       | C1 FE                      |
+| 3j.3h  | 0xC0AC-0xC0AD   | 2B    | Entry #10                       | C2 09                      |
+| 3j.3h  | 0xC0AE-0xC0AF   | 2B    | Entry #11                       | C1 96                      |
+| 3j.3h  | 0xC0B0-0xC0B1   | 2B    | Entry #12                       | C1 BB                      |
+| 3j.3h  | 0xC0B2-0xC0B3   | 2B    | Entry #13                       | C1 D1                      |
+| 3j.3h  | 0xC0B4-0xC0B5   | 2B    | Entry #14                       | C1 F3                      |
+| 3j.3h  | 0xC0B6-0xC0B7   | 2B    | Entry #15                       | C2 09                      |
+| 3j.3h  | 0xC0B8-0xC0B9   | 2B    | Entry #16                       | C1 8B                      |
+| 3j.3h  | 0xC0BA-0xC0BB   | 2B    | Entry #17                       | C1 C6                      |
+| 3j.3h  | 0xC0BC-0xC0BD   | 2B    | Entry #18                       | C1 E2                      |
+| 3j.3h  | 0xC0BE-0xC0BF   | 2B    | Entry #19                       | C1 FE                      |
+| 3j.3h  | 0xC0C0-0xC0C1   | 2B    | Entry #20                       | C2 09                      |
+| 3j.3h  | 0xC0C2-0xC0C3   | 2B    | Entry #21                       | C1 A1                      |
+| 3j.3h  | 0xC0C4-0xC0C5   | 2B    | Entry #22                       | C1 A1                      |
+| 3j.3h  | 0xC0C6-0xC0C7   | 2B    | Entry #23                       | C1 A1                      |
+| 3j.3h  | 0xC0C8-0xC0C9   | 2B    | Entry #24                       | C1 A1                      |
+| 3j.3h  | 0xC0CA-0xC0CB   | 2B    | Entry #25                       | C2 14                      |
+| 3j.3h  | 0xC0CC-0xC0CD   | 2B    | Entry #26                       | C0 D8                      |
+| 3j.3h  | 0xC0CE-0xC0CF   | 2B    | Entry #27                       | C0 E8                      |
+| 3j.3h  | 0xC0D0-0xC0D1   | 2B    | Entry #28                       | C0 F8                      |
+| 3j.3h  | 0xC0D2-0xC0D3   | 2B    | Entry #29                       | C0 E0                      |
+| 3j.3h  | 0xC0D4-0xC0D5   | 2B    | Entry #30                       | C0 F0                      |
+| 3j.3h  | 0xC0D6-0xC0D7   | 2B    | Entry #31                       | C1 00                      |
+| 3j.3h  | 0xC0D8-0xC0D9   | 2B    | Entry #32                       | C1 13                      |
+| 3j.3h  | 0xC0DA-0xC0DB   | 2B    | Entry #33                       | C1 13                      |
+| 3j.3h  | 0xC0DC-0xC0DD   | 2B    | Entry #34                       | C1 13                      |
+| 3j.3h  | 0xC0DE-0xC0DF   | 2B    | Entry #35                       | C1 13                      |
+| 3j.3h  | 0xC0E0-0xC0E1   | 2B    | Entry #36                       | C1 08                      |
+| 3j.3h  | 0xC0E2-0xC0E3   | 2B    | Entry #37                       | C1 08                      |
+| 3j.3h  | 0xC0E4-0xC0E5   | 2B    | Entry #38                       | C1 08                      |
+| 3j.3h  | 0xC0E6-0xC0E7   | 2B    | Entry #39                       | C1 08                      |
+| 3j.3h  | 0xC0E8-0xC0E9   | 2B    | Entry #40                       | C1 1E                      |
+| 3j.3h  | 0xC0EA-0xC0EB   | 2B    | Entry #41                       | C1 1E                      |
+| 3j.3h  | 0xC0EC-0xC0ED   | 2B    | Entry #42                       | C1 50                      |
+| 3j.3h  | 0xC0EE-0xC0EF   | 2B    | Entry #43                       | C1 5B                      |
+| 3j.3h  | 0xC0F0-0xC0F1   | 2B    | Entry #44                       | C1 29                      |
+| 3j.3h  | 0xC0F2-0xC0F3   | 2B    | Entry #45                       | C1 29                      |
+| 3j.3h  | 0xC0F4-0xC0F5   | 2B    | Entry #46                       | C1 45                      |
+| 3j.3h  | 0xC0F6-0xC0F7   | 2B    | Entry #47                       | C1 66                      |
+| 3j.3h  | 0xC0F8-0xC0F9   | 2B    | Entry #48                       | C1 34                      |
+| 3j.3h  | 0xC0FA-0xC0FB   | 2B    | Entry #49                       | C1 34                      |
+| 3j.3h  | 0xC0FC-0xC0FD   | 2B    | Entry #50                       | C1 34                      |
+| 3j.3h  | 0xC0FE-0xC0FF   | 2B    | Entry #51                       | C1 71                      |
+| 3j.3h  | 0xC100-0xC101   | 2B    | Entry #52                       | C1 34                      |
+| 3j.3h  | 0xC102-0xC103   | 2B    | Entry #53                       | C1 34                      |
+| 3j.3h  | 0xC104-0xC105   | 2B    | Entry #54                       | C1 34                      |
+| 3j.3h  | 0xC106-0xC107   | 2B    | Entry #55                       | C1 71                      |
+
+J6 ROM (0xFxxx Block):
+00 22 00 06 
+C6 CC 40 06 
+C6 3C 14 66 
+00 CC 43 66 
+C6 3C 14 66 
+C6 CC 40 06 
+00 22 00 06 
+00 00 00 00
+
+M4 ROM (0xDxxx Block):
+Map Level Block Range Definition (0x979 - 0x980)
+Map 1 Reference : 0x979 : D9 81
+Map 2 Reference : 0x97B : D9 89
+Map 3 Reference : 0x97D : D9 91
+Map 4 Reference : 0x97F : D9 99
+
+Map Level Data (0x981 - 0x9A0)
+Map 1 Data : 0x981 : 90 00 90 C0 91 80 92 40
+Map 2 Data : 0x989 : 93 00 93 C0 94 80 95 40
+Map 3 Data : 0x991 : 96 00 96 C0 97 80 98 40
+Map 4 Data : 0x999 : 99 00 99 C0 9A 80 9B 40
+
+Map Level Block 2 Range Definition (0xA0C - 0xA13)
+Map 1 Reference : 0xA0C : DA 14
+Map 2 Reference : 0xA0E : DA 21
+Map 3 Reference : 0xA10 : DA 2E
+Map 4 Reference : 0xA12 : DA 3B
+
+Map Level Data 2 (0xA14 - 0xA49)
+Map 1 Data : 0xA14 : 05 90 00 05 91 C0 05 93 80 05 40 FF
+Map 2 Data : 0xA21 : 05 97 00 05 98 C0 05 9A 80 05 9C 40 FF
+Map 3 Data : 0xA2E : 06 90 00 06 91 C0 06 93 80 06 95 40 FF
+Map 4 Data : 0xA3B : 06 97 00 06 98 C0 06 9A 80 06 9C 40 FF 
+
+M1 ROM (0xAxxx Block): 
+
+High Score Table (0x4A3 - 0x4CC):
+# Max Score = 99 99 99 (999999) - not sure what happens on rollover. :)
+HIGH SCORE : 0x4A0 : 03 58 40 (035840)
+1ST Score  : 0x4A3 : 03 58 40 (035840)
+1ST Name   : 0x4A6 : 48 54 41 (HTA in ASCII)
+2ND Score  : 0x4A9 : 03 40 60 (034060)
+2ND Name   : 0x4AC : 4D 4E 55 (MNU in ASCII)
+3RD Score  : 0x4AF : 03 38 60 (033860)
+3RD Name   : 0x4B2 : 53 49 53 (SIS in ASCII)
+4TH Score  : 0x4B5 : 02 96 60 (029660)
+4TH Name   : 0x4B8 : 4B 4B 4F (KKO in ASCII)
+5TH Score  : 0x4BB : 02 34 60 (023460)
+5TH Name   : 0x4BE : 59 4E 41 (YNA in ASCII)
+6TH Score  : 0x4C1 : 01 58 60 (015860)
+6TH Name   : 0x4C4 : 46 55 4A (FUJ in ASCII)
+7TH Score  : 0x4C7 : 01 20 60 (012060)
+7TH Name   : 0x4CA : 4D 41 54 (MAT in ASCII)
+1ST Stage  : 0x4CD : 02 (Level 3)
+2ND Stage  : 0x4CE : 02 (Level 3)
+3RD Stage  : 0x4CF : 02 (Level 3)
+4TH Stage  : 0x4D0 : 01 (Level 2)
+5TH Stage  : 0x4D1 : 01 (Level 2)
+6TH Stage  : 0x4D2 : 01 (Level 2)
+7TH Stage  : 0x4D3 : 01 (Level 2)
+
+Unknown Block Range Start Definition (0x554 - 0x55D):
+Unknown Range 1: 0x554 : A5 5E
+Unknown Range 2: 0x556 : A5 7E
+Unknown Range 3: 0x558 : A5 9E
+Unknown Range 4: 0x55A : A5 BE
+Unknown Range 5: 0x55C : A5 DE
+
+Unknown Range 1 Bytes : 00 01 00 00 03 00 30 08 00 00 A0 00 03 C1 7C 56 15 00 ...
+Unknown Range 2 Bytes : 00 01 00 01 03 00 30 08 00 00 FF 00 03 C1 7C 56 15 00 ...
+Unknown Range 3 Bytes : 00 01 00 02 03 00 30 08 00 03 FF 00 03 C1 7C 56 15 00 ...
+Unknown Range 4 Bytes : 01 00 00 03 00 00 30 08 00 00 F0 00 00 C1 7C 56 00 00 ...
+Unknown Range 5 Bytes : 01 00 00 04 00 00 30 08 00 00 FF 00 00 C1 7C 56 00 00 ...
+
+
+If Map Range Start is modified to a different map pointer AND Corresponding Map Data in M4 Rom is changed at 0x981, the maps can be swapped.  :) Finally.
+Scroll ranges still not found, end treasures still not swapping, tho.  :(  Palette colors do not swap, either.  Must be another block somewhere.
+
+Mental Note : Check rom M5 at 0x560 - that looks like it could be the scroll table?
+Mental Note : Check rom M3 at 0x8EE - that looks like another reference table
+
+Map Block Range Start Definitions (0x5FE - 0x61D):
+Map 1/Difficulty 1: 0x5FE : A6 1E
+Map 2/Difficulty 1: 0x600 : A7 66
+Map 3/Difficulty 1: 0x602 : A8 AE
+Map 4/Difficulty 1: 0x604 : A9 F6
+Map 1/Difficulty 2: 0x606 : AB 3E 
+Map 2/Difficulty 2: 0x608 : AC 86
+Map 3/Difficulty 2: 0x60A : AD CE
+Map 4/Difficulty 2: 0x60C : AF 16
+Map 1/Difficulty 3: 0x60E : B0 5E
+Map 2/Difficulty 3: 0x611 : B1 A6
+Map 3/Difficulty 3: 0x613 : B2 EE
+Map 4/Difficulty 3: 0x615 : B4 36
+Map 1/Difficulty 4: 0x617 : B5 7E
+Map 2/Difficulty 4: 0x619 : B6 C6
+Map 3/Difficulty 4: 0x61B : B8 0E
+Map 4/Difficulty 4: 0x61D : B9 56
+
+Base Offset: 0x061E
+Block Size: 0x0148 bytes (328 bytes) per map/difficulty combination
+Total Blocks: 16 (4 maps × 4 difficulties)
+
+Block Calculation:
+offset = 0x061E + ((difficulty * 4) + map_index) * 0x0148
+
+Where:
+  difficulty = 0-3 (Difficulty 1-4)
+  map_index = 0-3 (Map 1-4)
+
+Map/Difficulty Block Address Ranges:
+Map 1/Difficulty 1: 0x061E - 0x0765
+Map 2/Difficulty 1: 0x0766 - 0x08AD
+Map 3/Difficulty 1: 0x08AE - 0x09F5
+Map 4/Difficulty 1: 0x09F6 - 0x0B3D
+Map 1/Difficulty 2: 0x0B3E - 0x0C85
+Map 2/Difficulty 2: 0x0C86 - 0x0DCD
+Map 3/Difficulty 2: 0x0DCE - 0x0F15
+Map 4/Difficulty 2: 0x0F16 - 0x105D
+Map 1/Difficulty 3: 0x105E - 0x11A5
+Map 2/Difficulty 3: 0x11A6 - 0x12ED
+Map 3/Difficulty 3: 0x12EE - 0x1435
+Map 4/Difficulty 3: 0x1436 - 0x157D
+Map 1/Difficulty 4: 0x157E - 0x16C5
+Map 2/Difficulty 4: 0x16C6 - 0x180D
+Map 3/Difficulty 4: 0x180E - 0x1955
+Map 4/Difficulty 4: 0x1956 - 0x1A9D
+
+Complete Block Structure:
+
+Offset +0x00 (2 bytes): Logical Map Pointer
+  Points to offset in C6/C7 ROM for collision/physics data
+  Observed values: 0x9000 or 0x9700
+  Maps 1 and 3 use 0x9000
+  Maps 2 and 4 use 0x9700
+
+Offset +0x02 (2 bytes): Visual Map Pointer
+  Points to offset in C8 ROM for tile graphics data
+  Observed values: 0x9000, 0x9300, 0x9600, 0x9900
+  Map 1: 0x9000
+  Map 2: 0x9300
+  Map 3: 0x9600
+  Map 4: 0x9900
+
+Offset +0x04 (1 byte): Enemy Spawn Rate
+  Controls frequency and quantity of enemy spawns
+  Tested range: 0x05-0x08 (game uses these)
+  Values 0x01-0x0E probably work
+  Values 0x0F and higher cause game crashes (buffer overflow suspected)
+  Higher values = faster and more numerous enemy spawns
+
+Offset +0x05 (1 byte): Time Limit (in seconds)
+  Countdown timer for level completion
+  CONFIRMED VALUES:
+    Map 1: 0x3C = 60 seconds
+    Map 2: 0x5A = 90 seconds
+    Map 3: 0x8C = 140 seconds
+    Map 4: 0x8C = 140 seconds
+
+Offset +0x06 (5 bytes): UNKNOWN DATA
+  Purpose not yet determined
+  Observed patterns:
+    Map 1/D1: F0 F8 B0 FF B0
+    Map 2/D1: E0 F0 B0 FF B0
+    Map 3/D1: E0 F0 B0 FF B0
+    Map 4/D1: E0 F0 B0 FF E0
+    Map 1/D2: E0 F0 B0 FF D0
+  Possible theories:
+    - Enemy type/AI configuration
+    - Treasure room parameters
+    - Additional map behavior flags
+    - Padding or reserved space
+
+Offset +0x0B (3 bytes): Player Start Position
+  Format: YY YY XX (BIG-ENDIAN)
+  YY YY = Column coordinate (0x0000 to 0x01F8)
+  XX = Row coordinate (0x00 to 0x58)
+  Tile ID for visualization: 0x29 (forward-facing player sprite)
+
+Offset +0x0E (3 bytes): Respawn Point 1
+  Format: YY YY XX (BIG-ENDIAN)
+
+Offset +0x11 (3 bytes): Respawn Point 2
+  Format: YY YY XX (BIG-ENDIAN)
+
+Offset +0x14 (3 bytes): Respawn Point 3
+  Format: YY YY XX (BIG-ENDIAN)
+
+Offset +0x17 (1 byte): Respawn Count
+  Valid range: 0x00 to 0x03
+  Determines how many respawn points are active
+
+Offset +0x18 (224 bytes): Items Block
+  14 items × 16 bytes per item
+  Item Format (16 bytes each):
+    Byte 0: Active flag (0x01 = active, 0x00 = inactive)
+    Bytes 1-4: Padding (always 0x00)
+    Bytes 5-6: YYYY coordinate (BIG-ENDIAN, column * 0x08)
+    Byte 7: XX coordinate (row * 0x08)
+    Bytes 8-14: Padding (always 0x00)
+    Byte 15: Tile ID
+      0x62 = Treasure (gold bars)
+      0x6F = Ring (magic ring)
+      0x70 = Key (unlocks door)
+      0x72 = Keyhole (consumes key)
+
+Offset +0xF8 (1 byte): Separator
+  Always 0x00
+
+Offset +0xF9 (48 bytes): Teleports Block
+  6 teleports × 8 bytes per teleport
+  Teleport Format (8 bytes each):
+    Bytes 0-1: YYYY coordinate (BIG-ENDIAN, column * 0x08)
+    Byte 2: Bottom row XX coordinate
+    Byte 3: Top row XX coordinate
+    Bytes 4-7: Padding (always 0x00)
+  Note: Both teleporter ends share same column coordinate
+
+Offset +0x129 (28 bytes): Spawners Block
+  7 spawners × 4 bytes per spawner
+  Spawner Format (4 bytes each):
+    Bytes 0-1: YYYY coordinate (BIG-ENDIAN, column * 0x08)
+    Byte 2: XX coordinate (row * 0x08)
+    Byte 3: Padding (always 0x00)
+
+CRITICAL NOTE ON BYTE ORDER:
+All 16-bit YYYY coordinates use BIG-ENDIAN format throughout!
+High byte stored first, low byte second
+Example: Coordinate 0x0180 is stored as bytes [01] [80], NOT [80] [01]
+This was causing significant bugs until discovered and corrected
+
+================================================================================
+COMPOSITE OBJECTS
+================================================================================
+
+Door (3×3 tile block):
+
+Visual Tiles:
+  Row 0: 115  116  117
+  Row 1: 118  119  120
+  Row 2: 121  122  123
+
+Logical Bytes:
+  Row 0: [00,00]  [00,06]  [00,00]
+  Row 1: [55,06]  [F6,6E]  [F6,06]
+  Row 2: [00,00]  [F0,66]  [F0,00]
+
+Rules:
+- ONE door per map (cannot be deleted or duplicated)
+- Drag-and-drop to move (click to select, drag to new position)
+- Cannot overlap with other composite objects
+- Not available in tile palette (move-only object)
+- Essential for map progression
+
+--------------------------------------------------------------------------------
+
+Teleporter (3×1 vertical block):
+
+Visual Tiles: 100, 38, 101 (top to bottom)
+Logical Bytes: [55,55], [00,00], [55,55]
+
+Rules:
+- Always placed in PAIRS (two teleporter stacks)
+- Both ends MUST be in same column (vertical alignment)
+- Two-phase placement:
+  1. Click tile palette teleporter, click map to place first end
+  2. Click same column to place second end (other columns blocked)
+  3. Press ESC to cancel placement
+- Right-click any part of teleporter pair to delete both ends
+- Cannot overlap other composite objects
+- Game uses column coordinate only (same for both ends)
+
+--------------------------------------------------------------------------------
+
+Spawners (4 directional variants):
+
+Right-facing Spawner (3 rows × 2 columns):
+Visual Tiles:
+  Row 0: 29  15
+  Row 1: 27  38
+  Row 2: 24  21
+
+Logical Bytes:
+  Row 0: [55,55]  [55,55]
+  Row 1: [55,55]  [00,00]
+  Row 2: [55,55]  [55,55]
+
+Left-facing Spawner (3 rows × 2 columns):
+Visual Tiles:
+  Row 0: 15  16
+  Row 1: 38  18
+  Row 2: 21  20
+
+Logical Bytes:
+  Row 0: [55,55]  [55,55]
+  Row 1: [00,00]  [55,55]
+  Row 2: [55,55]  [55,55]
+
+Up-facing Spawner (2 rows × 3 columns):
+Visual Tiles:
+  Row 0: 27  38  18
+  Row 1: 24  21  20
+
+Logical Bytes:
+  Row 0: [55,55]  [00,00]  [55,55]
+  Row 1: [55,55]  [55,55]  [55,55]
+
+Down-facing Spawner (2 rows × 3 columns):
+Visual Tiles:
+  Row 0: 29  15  16
+  Row 1: 27  38  18
+
+Logical Bytes:
+  Row 0: [55,55]  [55,55]  [55,55]
+  Row 1: [55,55]  [00,00]  [55,55]
+
+Spawner Rules:
+- Maximum 7 spawners per map
+- Select direction from palette before placement
+- Right-click to delete entire spawner
+- Cannot overlap other composite objects
+- Spawner component tiles excluded from regular tile palette:
+  Tiles 0x0F, 0x10, 0x12, 0x14, 0x15, 0x18, 0x1B, 0x1D
+
+================================================================================
+ITEM/TREASURE SYSTEM
+================================================================================
+
+Item Tiles and Pickup Rules:
+
+Key (Tile ID 0x70):
+- Can ONLY be picked up from side (left/right approach)
+- Must be placed in side-accessible box (Tile 0x22)
+- Used to unlock door or keyhole
+- Validates against keyhole count on map
+
+Treasure (Tile ID 0x62):
+- Can ONLY be picked up from below (bottom approach)
+- Must be placed in bottom-accessible box (Tile 0x4A)
+- Main collectible item for score
+
+Ring (Tile ID 0x6F):
+- Can ONLY be picked up from above (top approach)
+- Must be placed in top-accessible box (Tile 0x21)
+- Special power-up item
+
+Keyhole (Tile ID 0x72):
+- No directional constraint (walkable tile)
+- Consumes one key when player walks through
+- Blocks progress until key is used
+- Can have multiple keyholes per map
+
+Empty vs Filled Box Logic:
+
+Visual Map Tiles (Empty Boxes):
+- 0x21: Ring box (top-accessible)
+- 0x22: Key box (side-accessible)
+- 0x4A: Treasure box (bottom-accessible)
+
+Object Data Tiles (Filled Boxes):
+- 0x6F: Ring box (filled)
+- 0x70: Key box (filled)
+- 0x62: Treasure box (filled)
+
+Editor Behavior:
+- Visual map ALWAYS stores EMPTY box tiles
+- Object data stores FILLED tile IDs
+- Editor displays filled box graphic as overlay
+- When placing filled box from palette:
+  1. Write empty box tile to visual map
+  2. Create object entry with filled tile ID
+  3. Set coordinates properly
+  4. Editor shows filled overlay on top of empty box
+
+Map Validation on Load:
+- Scan visual layer for filled box tiles (0x62, 0x6F, 0x70)
+- If found, check if matching object entry exists
+- If object exists: Replace visual tile with corresponding empty box
+- If no object: Replace filled tile with empty path tile (0x26)
+
+Key/Keyhole Validation:
+- Count active keys in object data (tile ID 0x70)
+- Count active keyholes in object data (tile ID 0x72)
+- If keyholes > keys: Display warning (level unwinnable)
+- Validation performed on load and after item placement
+
+Item Constraints Table:
+Tile ID 0x70 (Key) → Must use Box 0x22
+Tile ID 0x62 (Treasure) → Must use Box 0x4A
+Tile ID 0x6F (Ring) → Must use Box 0x21
+Tile ID 0x72 (Keyhole) → No constraint (walkable)
+
+Empty to Filled Mapping:
+0x22 → 0x70 (Key box)
+0x4A → 0x62 (Treasure box)
+0x21 → 0x6F (Ring box)
+
+Filled to Empty Mapping:
+0x70 → 0x22
+0x62 → 0x4A
+0x6F → 0x21
+
+================================================================================
+SPAWN/RESPAWN SYSTEM
+================================================================================
+
+Player Start Position:
+
+Tile for Visualization: 0x29 (forward-facing player sprite)
+Storage Location: Offset +0x0B in object block (3 bytes)
+Format: YY YY XX (BIG-ENDIAN)
+Display: Green "START" label overlay in editor
+Rules:
+- ONE per map (cannot be deleted)
+- Drag-and-drop to move (same as door behavior)
+- Not in tile palette (move-only object)
+- Tile 0x29 placed in visual map for editor visualization only
+- Converted to empty path tile (0x26) on ROM save
+
+Respawn Points:
+
+Tile for Visualization: 0x17 (flame animation sprite)
+Storage Location: Offset +0x0E, +0x11, +0x14 in object block (3 bytes each)
+Format: YY YY XX (BIG-ENDIAN) per respawn
+Respawn Count: Offset +0x17 (1 byte, range 0x00-0x03)
+Display: Orange "FLAME" label overlay in editor
+Rules:
+- Maximum 3 respawn points per map
+- Click tile palette, click map to place
+- Right-click to delete (shifts remaining respawns down)
+- Tile 0x17 placed in visual map for editor visualization only
+- Converted to empty path tile (0x26) on ROM save
+
+Spawn Tiles:
+0x29 (Player start - excluded from regular palette, drag-only)
+0x17 (Respawn flame - in spawn points palette section)
+
+Editor Behavior on Load:
+- Read object data for player start and respawns
+- Convert game coordinates to editor row/column
+- Place visualization tiles (0x29, 0x17) in visual map
+- Apply coordinate flip (bottom-left origin → top-left indexing)
+
+Editor Behavior on Save:
+- Scan visual map for spawn tiles (0x29, 0x17)
+- Replace all with empty path tile (0x26)
+- Object data coordinates remain unchanged
+- Game uses object data, not visual tiles
+
+================================================================================
+BANKING SYSTEM
+================================================================================
+
+Bank Select Register: 0x8300 (write only)
+Banked Window: 0x9000-0x9FFF (4KB visible to CPU)
+
+Bank Selection Values:
+Write 0x00 to 0x8300 → C1 ROM appears at 0x9000 (tiles 0-31)
+Write 0x01 to 0x8300 → C2 ROM appears at 0x9000 (tiles 32-63)
+Write 0x02 to 0x8300 → C3 ROM appears at 0x9000 (tiles 64-95)
+Write 0x03 to 0x8300 → C4 ROM appears at 0x9000 (tiles 96-127)
+Write 0x04 to 0x8300 → C5 ROM appears at 0x9000 (tiles 128-159)
+Write 0x05 to 0x8300 → C6 ROM appears at 0x9000 (logical maps 1-2)
+Write 0x06 to 0x8300 → C7 ROM appears at 0x9000 (logical maps 3-4)
+Write 0x07 to 0x8300 → C8 ROM appears at 0x9000 (visual maps 1-4)
+Write 0x08 to 0x8300 → C9 ROM appears at 0x9000 (treasure graphics)
+
+How Banking Works:
+- CPU can only address 64KB (0x0000-0xFFFF)
+- Graphics ROMs total 36KB (too large for address space)
+- Banking hardware switches which 4KB ROM appears at 0x9000
+- Program code writes to 0x8300 to select active ROM
+- Multiple banks can be accessed rapidly by changing bank select
+
+Treasure Graphics in C9 (Bank 0x08):
+Map (Treasure 1): 0x0000-0x02FF in C9 ROM
+Genie Lamp (Treasure 2): 0x0300-0x05FF in C9 ROM
+Treasure Chest (Treasure 3): 0x0600-0x08FF in C9 ROM
+Tutankhamun Mask (Treasure 4): 0x0900-0x0BFF in C9 ROM
+
+Each treasure graphic is approximately 640-800 bytes
+Stored as 16 bytes wide, 40-50+ bytes tall
+Interleaved format similar to regular tiles but much larger
+
+Map Loading Process (Suspected):
+1. Game reads map index (0-3) and difficulty (0-3)
+2. Calculates object data offset (0x061E + block offset)
+3. Reads logical and visual map pointers from +0x00 and +0x02
+4. Banks in C6 or C7 (logical map)
+5. Copies collision data from 0x9000 + logical_pointer to RAM
+6. Banks in C8 (visual map)
+7. Copies tile data from 0x9000 + visual_pointer to video RAM
+8. Loads spawn rate, time limit, and other config from block
+
+================================================================================
+MAP CONFIGURATION DISCOVERY
+================================================================================
+
+Discovery Process:
+- Found table of map pointers while searching for treasure loading code
+- Noticed values matched offsets in C8 ROM exactly
+- Tested changing pointers to swap maps (unsuccessful initially)
+- Realized additional configuration bytes were present
+- Isolated and tested individual bytes to determine function
+
+Confirmed Configuration Bytes:
+
+Byte +0x04 - Enemy Spawn Rate:
+Test: Changed Map 1/D1 from 0x06 to 0x08
+Result: Significantly more enemies spawned more frequently
+Test: Changed Map 1/D1 from 0x06 to 0x0F
+Result: Game crashed immediately (buffer overflow suspected)
+Conclusion: Valid range approximately 0x01-0x0E, game uses 0x05-0x08
+
+Byte +0x05 - Time Limit:
+Test: Let Map 1 timer run to zero
+Result: Exactly 60 seconds (matches 0x3C hex value)
+Test: Let Map 2 timer run to zero
+Result: Exactly 90 seconds (matches 0x5A hex value)
+Test: Let Map 3 timer run to zero
+Result: Exactly 140 seconds (matches 0x8C hex value)
+Test: Changed Map 1 timer byte to 0xFF
+Result: Timer displayed 255 seconds in-game
+Conclusion: Direct seconds value, no conversion needed
+
+Bytes +0x06 to +0x0A - Unknown:
+Various patterns observed:
+F0 F8, E0 F0, B0 FF B0, B0 FF E0, B0 FF D0
+Attempts to modify these bytes have unclear or no visible effect
+Further investigation needed
+
+Remaining Mysteries:
+- Map 1 scroll limit location (not in this config block)
+- Purpose of 5 unknown bytes at +0x06
+- Why map pointer swapping doesn't work (other dependencies?)
+- Potential for hidden/test maps in unused ROM space
+
+================================================================================
+TILE PALETTE ORGANIZATION
+================================================================================
+
+Palette Sections (Left to Right):
+
+COMPOSITE OBJECTS:
+- Door (3×3)
+- Teleporter (3×1, displayed horizontally as 100-38-101)
+- Spawner Right (3×2)
+- Spawner Left (3×2)
+- Spawner Up (2×3)
+- Spawner Down (2×3)
+
+WALLS:
+Tiles to include: 0x00-0x0E, 0x11, 0x13, 0x1F-0x20, 0x23, 0x26-0x28
+Notable: 0x26 is THE critical empty path tile (walkable space)
+Excluded: 0x0F (spawner part), 0x21-0x22 (treasure boxes, in TREASURES)
+
+SPAWN POINTS:
+0x17 - Respawn flame (clickable to place)
+Note: 0x29 (Player start) excluded - drag-only object
+
+TREASURES:
+Display as pairs (Empty | Filled):
+0x21 (Empty ring box) | 0x6F (Filled ring box)
+0x22 (Empty key box) | 0x70 (Filled key box)
+0x4A (Empty treasure box) | 0x62 (Filled treasure box)
+0x72 (Keyhole) - standalone, no pair
+
+Tiles to EXCLUDE from all palette sections:
+0x10, 0x16, 0x1E - Keyhole animations
+0x19, 0x1A, 0x1C - Flame animations (except 0x17)
+0x0F, 0x12, 0x14, 0x15, 0x18, 0x1B, 0x1D - Spawner components
+0x23-0x25 - Player sprites (except 0x29 for start, which is drag-only)
+0x29-0x49 - Sprite animations (except 0x29 for start marker)
+0x4B-0x61 - Various animations
+0x63 - Explosion
+0x64-0x65 - Teleporter pillars (placed via composite)
+0x66-0x6E - Animations
+0x71 - Keyhole animation
+0x73-0x7B - Door tiles (placed via composite)
+0x7C-0x9F - Remaining animations
+
+Palette Layout Design:
+- Four vertical columns (Composite, Walls, Spawns, Treasures)
+- Each column wraps tiles horizontally within its width
+- Column widths: Composite 550px, Walls 300px, Spawns 150px, Treasures 250px
+- Tiles display at current zoom level (default 3x)
+- Total window width: 1800px to minimize scrolling
+- Palette height: ~200px with scrolling as needed
+
+================================================================================
+IMPLEMENTED FEATURES V10
+================================================================================
+
+Core Functionality:
+- Load and display all 4 maps with correct palettes
+- 3x zoom default, adjustable 1x-8x
+- Tile rotation (90° for correct orientation)
+- Visual map (C8) editing and saving
+- Logical map (C6/C7) editing and saving with byte-pair format
+- Object data (M1/M2) loading and saving across 4 difficulties
+- Backup system (timestamped .backup files on save)
+
+Map Editing:
+- Click tile palette to select, click map to place
+- Single tile placement with logical byte auto-generation
+- Composite object placement (door, teleporter, spawners)
+- Filled treasure box placement (creates object + visual tile)
+- Keyhole placement (object data + visual tile)
+- Protection: Cannot overwrite composite objects with single tiles
+- Collision detection prevents overlapping composites
+
+Composite Objects:
+- Door: Drag-and-drop movement (click to select, drag to move)
+- Player Start: Drag-and-drop movement (same as door)
+- Teleporter: Two-phase placement (first end, then second end same column)
+- Spawners: Four directional variants, click to place
+- Right-click deletion for teleporters and spawners
+- Visual highlights during drag (cyan when selected, yellow ghost while dragging)
+
+Object Management:
+- Item placement (keys, treasures, rings, keyholes)
+- Respawn point placement (up to 3 per map)
+- Right-click deletion of items, teleports, spawns, respawns
+- Object counters: Items X/14, Teleports X/6, Spawners X/7, Respawns X/3
+- Real-time counter updates
+- Key/Keyhole validation warning (if keyholes > keys)
+
+Difficulty System:
+- 4 difficulty levels (corrected from original 3)
+- Difficulty 1: Full map and object editing
+- Difficulties 2-4: Object enable/disable only, map editing locked
+- Visual warning when in locked difficulty
+- All difficulties share same visual/logical maps
+- Per-difficulty object enable states
+
+Display Options:
+- Show/hide grid overlay
+- Show/hide object overlays
+- Hex tile IDs toggle (0xNN vs decimal)
+- Coordinate hover display (XX, YYYY format with row/col)
+- Map view: Exact fit at current zoom, no wasted space
+- Palette: Four-column layout with intelligent wrapping
+
+Visualization:
+- Player start: Green box with "START" label
+- Respawns: Orange circle with "FLAME" label
+- Filled boxes: Semi-transparent overlay of filled tile
+- Keyholes: Small red box (or actual tile if preferred)
+- Teleporters: Magenta dashed line connecting both ends
+- Spawners: Orange circle
+- Door: Cyan highlight when selected
+- Player start: Lime highlight when selected
+
+Coordinate System:
+- Proper game coordinate display (XX, YYYY format)
+- Coordinate flip handling (bottom-left game origin → top-left array indexing)
+- Correct BIG-ENDIAN byte order for all 16-bit coordinates
+- Teleporter column constraint (second end must match first end's column)
+
+File Operations:
+- Save All: Writes visual maps, logical maps, and all object data
+- Export: Copies modified ROMs to chosen directory
+- Automatic backup creation before overwriting
+- Preserves extra ROM data beyond edited sections
+- Multi-ROM object data spanning (handles m1.1h and m2.2h boundary correctly)
+
+User Interface:
+- 1800×900 default window size
+- Left panel: Map selection, difficulty buttons, object counters, display options
+- Main view: Map display with exact dimensions, no black bars
+- Bottom panel: Tile palette with four organized sections
+- Status bar: Current action, coordinate display
+- ESC key: Cancel teleporter placement or drag operations
+
+================================================================================
+KNOWN ISSUES
+================================================================================
+
+Critical Issues:
+
+Map 1 Scroll Limit:
+- Map 1 artificially limited to approximately 50% scroll distance
+- Other maps (2-4) scroll fully across all 64 columns
+- Limit not found in object data configuration block
+- Suspected to be hardcoded in program ROM
+- Likely implemented as comparison: if (map==0 && player_x > 0xC0) clamp_scroll
+- Location unknown - requires disassembly of scroll/camera code
+
+Map Pointer Swapping:
+- Cannot swap maps by changing visual/logical pointers alone
+- Changing Map 1's pointers to Map 4's values doesn't load Map 4
+- Other dependencies must exist (palette? enemy AI? treasure selection?)
+- Suggests additional map-specific tables not yet discovered
+
+Unknown Configuration Bytes:
+- 5 bytes at offset +0x06 in object block remain mysterious
+- Patterns observed: F0 F8, E0 F0, B0 FF B0, B0 FF E0, B0 FF D0
+- Modifying these bytes has unclear or no visible effects
+- Could be: enemy AI params, treasure logic, unused padding, or other config
+
+Minor Issues:
+
+Teleporter Detection on Load:
+- Teleporters not always detected and protected on initial map load
+- Must refresh detection when switching maps
+- Root cause: Detection runs before object data fully processed
+- Workaround: Re-run find_teleporters() in on_map_select()
+
+Spawner Protection:
+- Spawner protection works but could be more robust
+- Edge cases with partially overlapping spawners need testing
+
+Item Overlay Positioning:
+- Fixed coordinate flip issues, but occasional precision problems
+- Related to zoom level calculations at non-integer zooms
+
+Save Function:
+- Spawn tiles (0x29, 0x17) not yet converted to 0x26 on save
+- Currently saves spawn tiles directly to ROM
+- Game may handle this, but proper conversion needed
+- Function save_visual_maps_to_rom() needs update
+
+Edge Cases Not Fully Tested:
+- Placing composites at map boundaries
+- Maximum object counts (14 items, 6 teleports, 7 spawners, 3 respawns)
+- Deleting last object of each type
+- Rapid map switching during object placement
+- Undo functionality (not implemented)
+
+================================================================================
+COORDINATE SYSTEM REFERENCE
+================================================================================
+
+Game Coordinate System (Bottom-Left Origin):
+
+Visual representation of game coordinates:
+  (0x00, 0x01F8)               (0x58, 0x01F8)
+  ┌─────────────────────────────────────┐
+  │                                     │
+  │  ← YYYY increases rightward →      │  ↑
+  │                                     │  │
+  │  ↑                                  │  XX
+  │  │                                  │  increases
+  │  XX increases upward                │  upward
+  │  │                                  │  │
+  │  ↓                                  │  ↓
+  └─────────────────────────────────────┘
+  (0x00, 0x0000)               (0x58, 0x0000)
+  ORIGIN (bottom-left)
+
+Array Indexing System (Top-Left Origin):
+
+Visual representation of array indices:
+  [0, 0]                       [0, 63]
+  ┌─────────────────────────────────────┐
+  │                                     │
+  │  ← Column increases rightward →    │  ↑
+  │                                     │  │
+  │  ↓                                  │  Row
+  │  │                                  │  increases
+  │  Row increases downward             │  downward
+  │  │                                  │  │
+  │  ↓                                  │  ↓
+  └─────────────────────────────────────┘
+  [11, 0]                      [11, 63]
+  ORIGIN (top-left)
+
+Coordinate Conversion Formulas:
+
+Game Coordinates → Array Indices:
+  row_array = (map_height - 1) - (XX / 0x08)
+  col_array = YYYY / 0x08
+
+Array Indices → Game Coordinates:
+  XX = ((map_height - 1) - row_array) * 0x08
+  YYYY = col_array * 0x08
+
+Where:
+  map_height = 12 (number of rows)
+  XX range: 0x00 to 0x58 (0 to 88 decimal, step 8)
+  YYYY range: 0x0000 to 0x01F8 (0 to 504 decimal, step 8)
+  row_array range: 0 to 11
+  col_array range: 0 to 63
+
+Example Conversions:
+
+Game (XX=0x50, YYYY=0x0180) → Array:
+  row_array = 11 - (0x50 / 8) = 11 - 10 = 1
+  col_array = 0x0180 / 8 = 0x30 = 48
+  Result: Array position [1, 48]
+
+Array [1, 48] → Game:
+  XX = (11 - 1) * 8 = 10 * 8 = 0x50
+  YYYY = 48 * 8 = 384 = 0x0180
+  Result: Game position (XX=0x50, YYYY=0x0180)
+
+Visual Map Storage Format:
+
+ROM stores maps rotated 90° clockwise:
+- ROM byte order: Column 0 (bottom to top), Column 1 (bottom to top), etc.
+- Each column is 12 bytes (12 rows)
+- Total per map: 64 columns × 12 bytes = 768 bytes (0x300)
+
+Logical Map Storage Format:
+
+ROM stores logical maps with similar rotation:
+- Each tile has 2 bytes (collision pair)
+- Layout: 64 rows × 14 columns × 2 bytes
+- Columns 0 and 13 are CC borders (always [CC, CC])
+- Active columns: 1-12 (corresponding to visual columns 0-11 shifted by 1)
+
+Logical to Visual Mapping:
+  logical_row = visual_col
+  logical_col = visual_row + 1
+
+Visual to Logical Mapping:
+  visual_col = logical_row
+  visual_row = logical_col - 1
+
+Byte Order Reference:
+
+Single-byte values (XX coordinate, flags, counts):
+  Stored as-is, no special handling needed
+
+Two-byte values (YYYY coordinate):
+  BIG-ENDIAN format throughout entire ROM
+  High byte first, low byte second
+  Example: 0x0180 stored as [01] [80]
+  
+  Reading: value = (byte[0] << 8) | byte[1]
+  Writing: byte[0] = (value >> 8) & 0xFF
+           byte[1] = value & 0xFF
+
+Common Pitfall:
+  Many systems use little-endian (low byte first)
+  Tutankham uses big-endian (high byte first)
+  Initial implementation had byte order reversed
+  Caused all object positions to be wildly incorrect
+  Symptom: Objects appearing at column 512+ (out of bounds)
+
+================================================================================
+ADDITIONAL DISCOVERIES AND NOTES
+================================================================================
+
+Copyright Protection:
+- Copyright graphic in C9 ROM is checksummed
+- Game crashes if copyright screen is modified without updating checksum
+- Checksum location: Found in program ROM
+- Checksum algorithm: Reverse-engineered and implemented in Python
+- Purpose: Anti-tampering protection for arcade operators
+- Workaround: Recalculate checksum after graphics edits, patch ROM
+
+Graphics Format:
+- Tiles are 16×16 pixels, 4 bits per pixel (16 colors)
+- Stored as interleaved nibbles (2 pixels per byte)
+- Must be rotated 90° counterclockwise for correct display
+- Treasure graphics in C9 are much larger (16×40+ pixels)
+- Same interleaved format, just bigger dimensions
+
+Palette System:
+- 16 color palettes total (4 per map)
+- Each palette is 16 colors
+- Palettes stored at 0x8000-0x800F in CPU address space
+- Different maps use different palette indices
+- Palette data likely in program ROM (not in graphics ROMs)
+
+Sound System:
+- Separate sound CPU (likely Z80 or similar)
+- Sound data written to 0x8700
+- Sound enable at 0x8600
+- Sound ROMs not included in editor (not needed for maps)
+
+Difficulty Progression:
+- Difficulty affects object enable states only
+- Difficulty affects spawn rate (faster/more enemies)
+- Visual and logical maps identical across all difficulties
+- Treasure selection possibly tied to map, not difficulty
+
+Map Design Philosophy:
+- Map 1: Tutorial map, limited scroll, 60 second timer
+- Maps 2-4: Full-size maps, progressively longer timers
+- More respawn points added in later maps
+- Enemy spawn rate increases with difficulty and map number
+
+ROM Space Usage:
+- Object data: ~10.4KB (0x061E - 0x1A9D, 16 blocks × 328 bytes)
+- Visual maps: 3KB (4 maps × 768 bytes)
+- Logical maps: 7KB (4 maps × 1792 bytes)
+- Considerable unused space in ROM (potential for expansion)
+
+Potential Enhancements:
+- Map 5+ could fit in unused ROM space
+- Additional difficulties beyond 4 possible
+- More items, teleports, or spawners per map (if limits raised in code)
+- Custom treasure graphics replacements
+- Modified time limits or spawn rates
+- Unlock Map 1 scroll limit by patching program ROM
+
+================================================================================
+FUTURE DEVELOPMENT ROADMAP
+================================================================================
+
+High Priority:
+1. Find and patch Map 1 scroll limit in program ROM
+2. Implement spawn tile → 0x26 conversion on save
+3. Test and fix all edge cases (boundary placement, maximum objects)
+
+Medium Priority:
+4. Add map validation tool (check for unreachable areas, missing items)
+5. Implement copy/paste for map sections
+6. Add fill tool for mass tile placement
+7.  Finish Graphics editor integration (edit tile graphics)
+
+Research Needed:
+- Purpose of 5 unknown bytes in object configuration
+- Map 1 scroll limit code location
+- Why map pointer swapping doesn't work
+- Additional map-specific tables (if any)
+- Enemy type and AI parameter storage
+- Treasure selection logic
+- Hidden or unused content in ROM
+
+================================================================================
+VERSION HISTORY
+================================================================================
+
+V1-V4: Initial development, basic tile editing
+
+V5: First stable release
+- Tile palette with filtered tiles
+- Door drag-to-move
+- Object data loading
+- 3 difficulty levels
+- Basic overlays
+
+V6-V9: Major feature additions
+- 4 difficulty levels (corrected)
+- Composite object palette
+- Treasure system with filled boxes
+- Teleporter two-phase placement
+- Spawn/respawn visualization
+- Object counters
+- Key/keyhole validation
+
+V10: Current version
+- Map configuration discovery
+  * Enemy spawn rate byte identified
+  * Time limit byte confirmed
+  * Object block starting offset corrected (0x061E not 0x0629)
+- Player start drag-and-drop (consistent with door)
+- Player start removed from palette (move-only)
+- Improved palette layout (four columns, intelligent wrapping)
+- Window size optimization (1800×900, exact map fit at 3x zoom)
+- Coordinate system corrections (BIG-ENDIAN byte order)
+- Item overlay positioning fixes
+- Keyhole functionality implemented
+- Numerous bug fixes and stability improvements
+
+================================================================================
+CREDITS AND ACKNOWLEDGMENTS
+================================================================================
+
+Original Game:
+- Tutankham © 1982 Konami
+- Licensed to Stern Electronics for US distribution
+
+ROM Analysis:
+- MAME project for ROM definitions and memory maps
+- Arcade hardware documentation community
+
+Editor Development:
+- Main development by Rodimus
+- Primary development in collaboration with Claude (Anthropic)
+- Additional assistance from Grok (xAI) for copyright checksum discovery
+- Additional assistance from ChatGPT for general code fixes
+- Python, NumPy, Tkinter, Pillow, Colorlog for implementation
+
+Special Thanks:
+- MAME developers for emulation and debugging tools
+- Arcade game preservation community
+- Tutankham speedrunning and high-score community
+
+================================================================================
+END OF STATUS DOCUMENT V10
+================================================================================
+
+Next session: Continue with scroll limit hunting or other high-priority fixes
