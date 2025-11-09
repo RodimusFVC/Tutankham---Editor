@@ -16,36 +16,62 @@ def read_rom(filename):
         return bytearray(f.read())
 
 # Extract 4bpp sprite from full range (560 bytes)
-def extract_sprite(rom, offset, width=16, height=16):
+def extract_pixels(rom, offset, height, width, mode='tile', bytes_per_row=None):
     """
-    Decodes 4bpp sprite with 16-byte blocks where:
-      - bytes 0..7 -> even scanlines of the block
-      - bytes 8..15 -> odd scanlines of the block
-    Handles odd height by decoding the final single scanline if present.
+    Generic 4bpp pixel extractor for ROM sprites/tiles.
+    
+    Supports two common layouts:
+    - 'tile': Standard row-major (8px=4 bytes/row). Default for square tiles.
+    - 'sprite': Interleaved even/odd scanlines (16 bytes per 2 rows). Default bytes_per_row=16.
+    
+    Args:
+        rom: bytearray/list/np.array of ROM data.
+        offset: Starting byte offset in ROM.
+        height: Pixel height.
+        width: Pixel width (must be even).
+        mode: 'tile' (row-major) or 'sprite' (interleaved scanlines).
+        bytes_per_row: For 'sprite' mode only; defaults to width//2 * 2 (padded to even).
+    
+    Returns:
+        (height, width) uint8 array of pixel indices (0-15).
+    
+    Examples:
+        # 8x8 tile (32 bytes)
+        tile = extract_pixels(rom, 0x1000, 8, 8)  # mode='tile' auto
+        # 16x16 sprite (interleaved, 16 bytes/2rows -> 128 bytes)
+        sprite = extract_pixels(rom, 0x2000, 16, 16, mode='sprite')
+        # Odd height sprite (17 rows -> final single scanline)
+        tall = extract_pixels(rom, 0x3000, 17, 32, mode='sprite', bytes_per_row=16)
     """
-    bytes_per_row = width  # 16 for 32px width
-    sprite = np.zeros((height, bytes_per_row), dtype=np.uint8)
-
-    # Each pair of scanlines consumes 16 source bytes. Row-group index = y // 2
-    for y in range(height):
-        pair_index = y // 2
-        # base of the 16-byte chunk for this pair of rows
-        base = offset + pair_index * (bytes_per_row)
-        # if y is even -> use bytes base+0..base+7  (even scanline)
-        # if y is odd  -> use bytes base+8..base+15 (odd scanline)
-        half = 0 if (y % 2 == 0) else 8
-
-        for b in range(bytes_per_row // 2):  # 8 iterations -> 16 pixels
-            src_off = base + half + b
-            if src_off >= len(rom):
-                val = 0
-            else:
-                val = rom[src_off]
-            x = b * 2
-            sprite[y, x]     = val & 0x0F
-            sprite[y, x + 1] = (val >> 4) & 0x0F
-
-    return sprite
+    assert width % 2 == 0, "Width must be even for 4bpp"
+    pixels = np.zeros((height, width), dtype=np.uint8)
+    
+    if mode == 'tile':
+        bytes_per_row = width // 2
+        for y in range(height):
+            for x in range(width):
+                byte_off = offset + y * bytes_per_row + (x // 2)
+                byte_val = 0 if byte_off >= len(rom) else rom[byte_off]
+                pixels[y, x] = (byte_val >> (4 * (x % 2))) & 0x0F
+    
+    elif mode == 'sprite':
+        if bytes_per_row is None:
+            bytes_per_row = width // 2  # Default: tight pack (e.g. 16px=8 bytes/row)
+        for y in range(height):
+            pair_idx = y // 2
+            base = offset + pair_idx * bytes_per_row
+            half = 0 if (y % 2 == 0) else bytes_per_row // 2  # Even: 0..N/2-1, Odd: N/2..N-1
+            for b in range(width // 2):
+                src_off = base + half + b
+                byte_val = 0 if src_off >= len(rom) else rom[src_off]
+                x = b * 2
+                pixels[y, x] = byte_val & 0x0F
+                pixels[y, x + 1] = (byte_val >> 4) & 0x0F
+    
+    else:
+        raise ValueError("mode must be 'tile' or 'sprite'")
+    
+    return pixels
 
 # Apply palette to sprite
 def apply_palette_to_sprite(sprite, palette):
@@ -79,8 +105,7 @@ def display_copyright():
     root = tk.Tk()
     root.title("Tutankham j6.6h Copyright Graphic")
 
-
-    sprite = extract_sprite(rom_data, offset, width=sprite_height, height=sprite_width)
+    sprite = extract_pixels(rom_data, offset, width=sprite_height, height=sprite_width)
     sprite = np.rot90(sprite, k=1)  # Rotate 90° clockwise based on your note
     color_sprite = apply_palette_to_sprite(sprite, palette)
 

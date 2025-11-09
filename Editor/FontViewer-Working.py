@@ -18,18 +18,62 @@ def read_rom(filename):
     with open(filename, "rb") as f:
         return bytearray(f.read())
 
-# Extract 8×8px, 4bpp tile (32 bytes)
-def extract_tile(rom_data, offset, width=8, height=8):
-    tile = np.zeros((height, width), dtype=np.uint8)
-    for y in range(height):
-        for x in range(width):
-            byte_offset = offset + y * (width // 2) + (x // 2)
-            byte_val = rom_data[byte_offset]
-            if x % 2 == 0:
-                tile[y, x] = byte_val & 0x0F
-            else:
-                tile[y, x] = (byte_val >> 4) & 0x0F
-    return tile
+def extract_pixels(rom, offset, height, width, mode='tile', bytes_per_row=None):
+    """
+    Generic 4bpp pixel extractor for ROM sprites/tiles.
+    
+    Supports two common layouts:
+    - 'tile': Standard row-major (8px=4 bytes/row). Default for square tiles.
+    - 'sprite': Interleaved even/odd scanlines (16 bytes per 2 rows). Default bytes_per_row=16.
+    
+    Args:
+        rom: bytearray/list/np.array of ROM data.
+        offset: Starting byte offset in ROM.
+        height: Pixel height.
+        width: Pixel width (must be even).
+        mode: 'tile' (row-major) or 'sprite' (interleaved scanlines).
+        bytes_per_row: For 'sprite' mode only; defaults to width//2 * 2 (padded to even).
+    
+    Returns:
+        (height, width) uint8 array of pixel indices (0-15).
+    
+    Examples:
+        # 8x8 tile (32 bytes)
+        tile = extract_pixels(rom, 0x1000, 8, 8)  # mode='tile' auto
+        # 16x16 sprite (interleaved, 16 bytes/2rows -> 128 bytes)
+        sprite = extract_pixels(rom, 0x2000, 16, 16, mode='sprite')
+        # Odd height sprite (17 rows -> final single scanline)
+        tall = extract_pixels(rom, 0x3000, 17, 32, mode='sprite', bytes_per_row=16)
+    """
+    assert width % 2 == 0, "Width must be even for 4bpp"
+    pixels = np.zeros((height, width), dtype=np.uint8)
+    
+    if mode == 'tile':
+        bytes_per_row = width // 2
+        for y in range(height):
+            for x in range(width):
+                byte_off = offset + y * bytes_per_row + (x // 2)
+                byte_val = 0 if byte_off >= len(rom) else rom[byte_off]
+                pixels[y, x] = (byte_val >> (4 * (x % 2))) & 0x0F
+    
+    elif mode == 'sprite':
+        if bytes_per_row is None:
+            bytes_per_row = width // 2  # Default: tight pack (e.g. 16px=8 bytes/row)
+        for y in range(height):
+            pair_idx = y // 2
+            base = offset + pair_idx * bytes_per_row
+            half = 0 if (y % 2 == 0) else bytes_per_row // 2  # Even: 0..N/2-1, Odd: N/2..N-1
+            for b in range(width // 2):
+                src_off = base + half + b
+                byte_val = 0 if src_off >= len(rom) else rom[src_off]
+                x = b * 2
+                pixels[y, x] = byte_val & 0x0F
+                pixels[y, x + 1] = (byte_val >> 4) & 0x0F
+    
+    else:
+        raise ValueError("mode must be 'tile' or 'sprite'")
+    
+    return pixels
 
 # Apply palette to tile
 def apply_palette_to_tile(tile, palette):
@@ -61,7 +105,7 @@ def display_graphics():
     digits = []
     for i in range(10):  # 0–9
         offset = 0x0000 + (i * 32)  # Relative to file start
-        tile = extract_tile(rom_data, offset, 8, 8)
+        tile = extract_pixels(rom_data, offset, 8, 8)
         tile = np.rot90(tile, k=1)  # Rotate to correct sideways orientation
         color_tile = apply_palette_to_tile(tile, palette)
         img = Image.fromarray(color_tile[:, :, :3], "RGB").resize((32, 32), Image.NEAREST)  # 4x zoom
@@ -79,7 +123,7 @@ def display_graphics():
     gap_tiles = []
     for i in range(7):  # Special Characters 1–7
         offset = 0x0140 + (i * 32)  # Relative to file start
-        tile = extract_tile(rom_data, offset, 8, 8)
+        tile = extract_pixels(rom_data, offset, 8, 8)
         tile = np.rot90(tile, k=1)  # Rotate to correct sideways orientation
         color_tile = apply_palette_to_tile(tile, palette)
         img = Image.fromarray(color_tile[:, :, :3], "RGB").resize((32, 32), Image.NEAREST)  # 4x zoom
@@ -89,7 +133,7 @@ def display_graphics():
     alphabet = []
     for i in range(26):  # A–Z
         offset = 0x0220 + (i * 32)  # Relative to file start
-        tile = extract_tile(rom_data, offset, 8, 8)
+        tile = extract_pixels(rom_data, offset, 8, 8)
         tile = np.rot90(tile, k=1)  # Rotate to correct sideways orientation
         color_tile = apply_palette_to_tile(tile, palette)
         img = Image.fromarray(color_tile[:, :, :3], "RGB").resize((32, 32), Image.NEAREST)  # 4x zoom
