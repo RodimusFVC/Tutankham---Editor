@@ -275,7 +275,21 @@ TILE_NAMES = {
     0x4C: "Score Box - 3000 (Unused)",
     0x7F: "Rock? (Unused)"
 }
-
+FONT_NAMES = {
+    # Digits (0x0000-0x013F, 10 chars × 32 bytes)
+    0: "0",   1: "1",  2: "2",  3: "3",  4: "4",
+    5: "5",   6: "6",  7: "7",  8: "8",  9: "9",
+    # Special characters (0x0140-0x021F, 7 chars × 32 bytes)
+    10: "©", 11: "□", 12: ".", 13: "!", 14: "?",
+    15: "♪", 16: " ",
+    # Alphabet (0x0220-0x055F, 26 chars × 32 bytes)
+    17: "A", 18: "B", 19: "C", 20: "D", 21: "E", 
+    22: "F", 23: "G", 24: "H", 25: "I", 26: "J", 
+    27: "K", 28: "L", 29: "M", 30: "N", 31: "O", 
+    32: "P", 33: "Q", 34: "R", 35: "S", 36: "T", 
+    37: "U", 38: "V", 39: "W", 40: "X", 41: "Y", 
+    42: "Z"
+}
 #########################################
 # Code Starts Here
 #########################################
@@ -318,7 +332,7 @@ def create_window_icon(root, all_tiles, palettes):
 #########################################
 
 def load_all(location=None):
-    global all_tiles, visual_maps, logical_maps, palettes, high_scores
+    global all_tiles, all_fonts, visual_maps, logical_maps, palettes, high_scores
     
     try:
         # Load all ROMs into memory first
@@ -336,6 +350,7 @@ def load_all(location=None):
 
         # Load all data
         all_tiles = load_tiles()
+        all_fonts = load_fonts()
         visual_maps = load_visual_maps()
         logical_maps = load_logical_maps()
         palettes = load_palettes_from_rom()
@@ -569,20 +584,101 @@ def update_copyright_checksum():
     logging.info("Copyright checksum updated: 0x%04X", checksum)
 
 #########################################
+# Font Handling Functions
+#########################################
+
+def load_fonts():
+    """Load all 43 font characters from j6.6h ROM"""
+    all_fonts = []
+    rom_data = rom_cache['j6.6h']
+    
+    # Digits 0-9 (10 chars × 32 bytes)
+    for i in range(10):
+        offset = 0x0000 + (i * 32)
+        font = extract_pixels(rom_data, offset, 8, 8)
+        rotated_font = rotate_tile(font)
+        all_fonts.append(rotated_font)
+    
+    # Special characters (7 chars × 32 bytes)
+    for i in range(7):
+        offset = 0x0140 + (i * 32)
+        font = extract_pixels(rom_data, offset, 8, 8)
+        rotated_font = rotate_tile(font)
+        all_fonts.append(rotated_font)
+    
+    # Alphabet A-Z (26 chars × 32 bytes)
+    for i in range(26):
+        offset = 0x0220 + (i * 32)
+        font = extract_pixels(rom_data, offset, 8, 8)
+        rotated_font = rotate_tile(font)
+        all_fonts.append(rotated_font)
+    
+    return all_fonts
+
+def get_font_name(font_id):
+    """Get human-readable name for a font character"""
+    return FONT_NAMES.get(font_id, f"Font {font_id}")
+
+#########################################
 # Tile Handling Functions
 #########################################
 
-def extract_tile(rom_data, offset, width=16, height=16):
-    tile = np.zeros((height, width), dtype=np.uint8)
-    for y in range(height):
-        for x in range(width):
-            byte_offset = offset + y * (width // 2) + (x // 2)
-            byte_val = rom_data[byte_offset]
-            if x % 2 == 0:
-                tile[y, x] = byte_val & 0x0F
-            else:
-                tile[y, x] = (byte_val >> 4) & 0x0F
-    return tile
+def extract_pixels(rom, offset, height, width, mode='tile', bytes_per_row=None):
+    """
+    Generic 4bpp pixel extractor for ROM sprites/tiles.
+    
+    Supports two common layouts:
+    - 'tile': Standard row-major (8px=4 bytes/row). Default for square tiles.
+    - 'sprite': Interleaved even/odd scanlines (16 bytes per 2 rows). Default bytes_per_row=16.
+    
+    Args:
+        rom: bytearray/list/np.array of ROM data.
+        offset: Starting byte offset in ROM.
+        height: Pixel height.
+        width: Pixel width (must be even).
+        mode: 'tile' (row-major) or 'sprite' (interleaved scanlines).
+        bytes_per_row: For 'sprite' mode only; defaults to width//2 * 2 (padded to even).
+    
+    Returns:
+        (height, width) uint8 array of pixel indices (0-15).
+    
+    Examples:
+        # 8x8 tile (32 bytes)
+        tile = extract_pixels(rom, 0x1000, 8, 8)  # mode='tile' auto
+        # 16x16 sprite (interleaved, 16 bytes/2rows -> 128 bytes)
+        sprite = extract_pixels(rom, 0x2000, 16, 16, mode='sprite')
+        # Odd height sprite (17 rows -> final single scanline)
+        tall = extract_pixels(rom, 0x3000, 17, 32, mode='sprite', bytes_per_row=16)
+    """
+    assert width % 2 == 0, "Width must be even for 4bpp"
+    pixels = np.zeros((height, width), dtype=np.uint8)
+    
+    if mode == 'tile':
+        bytes_per_row = width // 2
+        for y in range(height):
+            for x in range(width):
+                byte_off = offset + y * bytes_per_row + (x // 2)
+                byte_val = 0 if byte_off >= len(rom) else rom[byte_off]
+                pixels[y, x] = (byte_val >> (4 * (x % 2))) & 0x0F
+    
+    elif mode == 'sprite':
+        if bytes_per_row is None:
+            bytes_per_row = width // 2  # Default: tight pack (e.g. 16px=8 bytes/row)
+        for y in range(height):
+            pair_idx = y // 2
+            base = offset + pair_idx * bytes_per_row
+            half = 0 if (y % 2 == 0) else bytes_per_row // 2  # Even: 0..N/2-1, Odd: N/2..N-1
+            for b in range(width // 2):
+                src_off = base + half + b
+                byte_val = 0 if src_off >= len(rom) else rom[src_off]
+                x = b * 2
+                pixels[y, x] = byte_val & 0x0F
+                pixels[y, x + 1] = (byte_val >> 4) & 0x0F
+    
+    else:
+        raise ValueError("mode must be 'tile' or 'sprite'")
+    
+    return pixels
 
 def rotate_tile(tile):
     return np.rot90(tile, k=1)
@@ -609,7 +705,7 @@ def load_tiles():
         num_tiles = len(rom_data) // tile_size
         for i in range(num_tiles):
             offset = i * tile_size
-            tile = extract_tile(rom_data, offset)
+            tile = extract_pixels(rom_data, offset, height=16, width=16)
             rotated_tile = rotate_tile(tile)
             all_tiles.append(rotated_tile)
     return all_tiles
@@ -1002,7 +1098,36 @@ def launch_tile_editor():
 
 def launch_font_editor():
     """Launch the font editor"""
-    messagebox.showinfo("Font Editor", "Font Editor - Coming soon!")
+    global open_windows
+    
+    if open_windows['font_editor'] is not None:
+        try:
+            open_windows['font_editor'].lift()
+            open_windows['font_editor'].focus_force()
+            return
+        except tk.TclError:
+            open_windows['font_editor'] = None
+    
+    try:
+        editor_window = tk.Toplevel(root)
+        editor_window.title(f"Tutankham Font Editor {EDITOR_VERSION}")
+        editor_window.geometry("1800x650")
+        
+        open_windows['font_editor'] = editor_window
+        
+        def on_close():
+            open_windows['font_editor'] = None
+            editor_window.destroy()
+        
+        editor_window.protocol("WM_DELETE_WINDOW", on_close)
+        
+        # Build font editor UI
+        build_font_editor_window(editor_window)
+        
+    except Exception as e:
+        logging.error(f"Error launching font editor: {e}")
+        messagebox.showerror("Error", f"Failed to launch font editor:\n{e}")
+        open_windows['font_editor'] = None
 
 def launch_ui_graphics_editor():
     """Launch the UI graphics editor"""
@@ -1077,6 +1202,168 @@ def launch_palette_editor():
         logging.error(f"Error launching palette editor: {e}")
         messagebox.showerror("Error", f"Failed to launch palette editor:\n{e}")
         open_windows['palette'] = None
+
+#########################################
+# Font Editor Functions
+#########################################
+
+def build_font_editor_window(window):
+    """Build the font editor interface"""
+    main_frame = ttk.Frame(window, padding=10)
+    main_frame.pack(fill=tk.BOTH, expand=True)
+    
+    # Title
+    title_label = ttk.Label(main_frame, text="Tutankham Font Editor", 
+                            font=('Arial', 16, 'bold'))
+    title_label.pack(pady=10)
+    
+    # Control frame
+    control_frame = ttk.Frame(main_frame)
+    control_frame.pack(fill=tk.X, pady=5)
+    
+    # Palette selector
+    ttk.Label(control_frame, text="Palette:", font=('Arial', 10)).pack(side=tk.LEFT, padx=5)
+    
+    palette_names = ["Map 1 Walls", "Map 2 Walls", "Map 3 Walls", "Map 4 Walls",
+                    "Unknown 1", "Unknown 2", "Unknown 3"]
+    
+    window.selected_palette_idx = tk.IntVar(value=0)
+    palette_dropdown = ttk.Combobox(control_frame, 
+                                   values=palette_names,
+                                   state="readonly", 
+                                   width=20)
+    palette_dropdown.current(0)
+    palette_dropdown.pack(side=tk.LEFT, padx=5)
+    palette_dropdown.bind("<<ComboboxSelected>>", 
+                         lambda e: rebuild_font_grid(window))
+    
+    window._palette_dropdown = palette_dropdown
+
+    ttk.Button(control_frame, text="Close", 
+              command=window.destroy).pack(side=tk.RIGHT, padx=5)
+
+    ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+    
+    # Font grid frame
+    font_frame = ttk.Frame(main_frame)
+    font_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+    
+    # Store references
+    window._font_frame = font_frame
+    window._font_images = []
+   
+    # Status frame
+    window.font_status_frame = ttk.Frame(main_frame)
+    window.font_status_frame.pack(side=tk.BOTTOM, fill=tk.X)
+    window.font_status_label = ttk.Label(window.font_status_frame, 
+                                        text="Ready - Click Any Character To Edit", 
+                                        relief=tk.SUNKEN, anchor=tk.W)
+    window.font_status_label.pack(fill=tk.X, padx=5, pady=2)
+    
+    # Build initial font grid
+    rebuild_font_grid(window)
+
+def rebuild_font_grid(window):
+    """Rebuild the font grid with current palette"""
+    font_frame = window._font_frame
+    window._font_images.clear()
+    
+    # Clear existing widgets
+    for widget in font_frame.winfo_children():
+        widget.destroy()
+    
+    # Get current palette
+    palette_idx = window._palette_dropdown.current()
+    palettes = load_palettes_from_rom()
+    palette = palettes[palette_idx]
+    
+    # Grid configuration
+    fonts_per_row = 15
+    font_spacing = 10
+    font_scale = 10  # Display at 10x (80x80 pixels) - fonts are 8x8
+    
+    # Configure grid to expand
+    for i in range(fonts_per_row):
+        font_frame.grid_columnconfigure(i, weight=1)
+    
+    # Create grid of all 43 font characters
+    for font_idx in range(len(all_fonts)):
+        row = font_idx // fonts_per_row
+        col = font_idx % fonts_per_row
+        
+        # Create frame for this font
+        font_container = ttk.Frame(font_frame, relief=tk.RAISED, borderwidth=1)
+        font_container.grid(row=row, column=col, padx=font_spacing, pady=font_spacing, sticky='nsew')
+        
+        # Character name label above
+        char_label = ttk.Label(font_container, text=get_font_name(font_idx), 
+                             font=('Arial', 24, 'bold'), foreground='#000000')
+        char_label.pack(pady=(5, 2))
+        
+        # Font image
+        font = all_fonts[font_idx]
+
+        preview_tile = font.copy()
+
+        # Due to the colors for EVERY Palette for 0 and 15 being black, we need to remap to make visible:
+        # leave background black, remap foreground (15) → 3 (grey)
+        preview_tile[preview_tile == 0] = 0
+        preview_tile[preview_tile == 15] = 3
+
+        color_font = apply_palette_to_tile(preview_tile, palette)
+
+        # Scale up
+        font_scaled = np.repeat(np.repeat(color_font, font_scale, axis=0), font_scale, axis=1)
+        font_rgb = font_scaled[:, :, :3]
+        font_img = Image.fromarray(font_rgb.astype('uint8')).convert('RGB')
+        font_photo = ImageTk.PhotoImage(font_img)
+        
+        # Store reference
+        window._font_images.append(font_photo)
+        
+        # Clickable label with border for visibility
+        font_label = tk.Label(font_container, image=font_photo,
+                             bg='#2b2b2b', cursor='hand2',
+                             relief=tk.SUNKEN, borderwidth=2)
+        font_label.pack(pady=2)
+        font_label.bind('<Button-1>', 
+                       lambda e, fid=font_idx: open_font_editor(window, fid))
+    
+    # Log to confirm it's working
+    logging.info(f"Rebuilt font grid with {len(all_fonts)} characters using palette {palette_idx}")
+
+def open_font_editor(window, font_idx):
+    """Open font editor dialog for a specific character"""
+    # Get current palette
+    palette_idx = window._palette_dropdown.current()
+    palettes = load_palettes_from_rom()
+    palette = palettes[palette_idx]
+    
+    # Create dialog
+    dialog = tk.Toplevel(window)
+    dialog.title(f"Edit Font Character: {get_font_name(font_idx)}")
+    dialog.geometry("400x500")
+    dialog.transient(window)
+    dialog.update_idletasks()
+    dialog.grab_set()
+    
+    main_frame = ttk.Frame(dialog, padding=10)
+    main_frame.pack(fill=tk.BOTH, expand=True)
+    
+    # Title
+    ttk.Label(main_frame, 
+             text=f"Character: {get_font_name(font_idx)}",
+             font=('Arial', 12, 'bold')).pack(pady=10)
+    
+    # TODO: Add 8x8 pixel editor canvas here (64x64 pixels, 8x zoom)
+    # TODO: Add color palette selector
+    # TODO: Add save/cancel buttons
+    
+    ttk.Label(main_frame, text="Font editor coming next...", 
+             font=('Arial', 10, 'italic')).pack(pady=50)
+    
+    ttk.Button(main_frame, text="Close", 
+              command=dialog.destroy).pack(pady=10)
 
 #########################################
 # Map Tile Editor Functions
@@ -1832,12 +2119,12 @@ menubar.add_cascade(label="Help", menu=helpmenu)
 # Main Code
 #########################################
 
-root.config(menu=menubar)				# Attach to window
-all_tiles = visual_maps = logical_maps = None		# Initialize Global Variables
-palettes = high_scores = None				# Initialize Global Variables
-load_all("Zip")						# Load initial data from zip
+root.config(menu=menubar)				            # Attach to window
+all_tiles = all_fonts = None                        # Initialize Global Variables
+visual_maps = logical_maps = None		            # Initialize Global Variables
+palettes = high_scores = None			            # Initialize Global Variables
+load_all("Zip")						                # Load initial data from zip
 create_window_icon(root, all_tiles, palettes)		# Create Window Icon
-
 
 # Add a status label to main window
 status_frame = ttk.Frame(root)
