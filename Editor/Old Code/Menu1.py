@@ -38,7 +38,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "V18"		# Editor Version Number
+EDITOR_VERSION = "V17"		# Editor Version Number
 open_windows = {			# Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -47,11 +47,6 @@ open_windows = {			# Window Tracking - ensure only one instance of each editor
     'treasure_editor': None,
     'high_score': None,
     'palette': None}
-state_callbacks = {         # Callback registry for cross-window updates
-    'palette_changed': [],
-    'tile_changed': [],
-    'font_changed': []
-}
 
 #########################################
 # Tutankham Data Setup
@@ -443,20 +438,6 @@ def create_window_icon(root, all_tiles, palettes):
             root._icon_ref = icon_photo  # store it in root
     except Exception:
         logging.warning("Couldn't set window icon", exc_info=True)
-
-def register_callback(event_type, callback):
-    """Register a callback for a state change event"""
-    if event_type in state_callbacks:
-        state_callbacks[event_type].append(callback)
-
-def trigger_callback(event_type, *args, **kwargs):
-    """Trigger all callbacks for an event type"""
-    if event_type in state_callbacks:
-        for callback in state_callbacks[event_type]:
-            try:
-                callback(*args, **kwargs)
-            except Exception as e:
-                logging.error(f"Callback error for {event_type}: {e}")
 
 #########################################
 # Rom Handling Functions
@@ -1078,276 +1059,7 @@ def save_object_data(objects, map_index, difficulty=0):
         write_byte_to_roms(pos + 2, spawn['x'])
         write_byte_to_roms(pos + 3, 0x00)
         pos += 4
-
-#########################################
-# Map Editor Helper Functions
-#########################################
-
-def find_door(map_index):
-    """Find door position on a map"""
-    visual_map = visual_maps[map_index]
     
-    for row in range(map_height - 2):
-        for col in range(map_width - 2):
-            is_door = True
-            for dr in range(3):
-                for dc in range(3):
-                    expected_tile = DOOR_TILES[dr, dc]
-                    actual_tile = visual_map[row + dr, col + dc]
-                    if expected_tile != actual_tile:
-                        is_door = False
-                        break
-                if not is_door:
-                    break
-            
-            if is_door:
-                return (row, col)
-    
-    return None
-
-def find_spawners(map_index):
-    """Find all spawner positions on a map by scanning for patterns"""
-    visual_map = visual_maps[map_index]
-    spawners = []
-    
-    # Check each spawner configuration
-    for direction, config in SPAWNER_CONFIGS.items():
-        tiles = config['tiles']
-        h, w = tiles.shape
-        
-        for row in range(map_height - h + 1):
-            for col in range(map_width - w + 1):
-                # Check if this position contains the spawner pattern
-                is_spawner = True
-                for dr in range(h):
-                    for dc in range(w):
-                        expected_tile = tiles[dr, dc]
-                        actual_tile = visual_map[row + dr, col + dc]
-                        if expected_tile != actual_tile:
-                            is_spawner = False
-                            break
-                    if not is_spawner:
-                        break
-                
-                if is_spawner:
-                    spawners.append({
-                        'row': row,
-                        'col': col,
-                        'width': w,
-                        'height': h,
-                        'direction': direction
-                    })
-    
-    return spawners
-
-def find_teleporters(map_index):
-    """Find all teleporter columns by checking object data"""
-    # We'll use difficulty 0 as reference for object positions
-    # This is a temporary implementation - will be updated when we refactor object handling
-    teleporter_cols = []
-    
-    # For now, scan for teleporter pillar tiles
-    visual_map = visual_maps[map_index]
-    for col in range(map_width):
-        for row in range(map_height):
-            if visual_map[row, col] in [100, 101]:  # Teleporter pillar tiles
-                if col not in teleporter_cols:
-                    teleporter_cols.append(col)
-                break
-    
-    return teleporter_cols
-
-def validate_teleporters(window):
-    """Remove teleporter entries that don't have matching visual tiles"""
-    for map_idx in range(num_maps):
-        visual_map = visual_maps[map_idx]
-        
-        # Check all difficulties for this map
-        for diff in range(NUM_DIFFICULTIES):
-            objects = window.object_data[diff][map_idx]
-            
-            for tp_idx, tp in enumerate(objects['teleports']):
-                if tp['y'] == 0:
-                    continue  # Already empty
-                
-                # Center column
-                center_col = tp['y'] // 0x08
-                
-                # Columns span: center-1, center, center+1
-                left_col = (tp['y'] - 0x08) // 0x08
-                right_col = (tp['y'] + 0x08) // 0x08
-                
-                # Rows
-                bottom_row = tp['bottom_row'] // 0x08
-                top_row = tp['top_row'] // 0x08
-                
-                # Skip if columns are out of bounds
-                if left_col < 0 or right_col >= map_width:
-                    tp['y'] = 0
-                    tp['top_row'] = 0
-                    tp['bottom_row'] = 0
-                    continue
-                
-                # Expected pattern across columns: [100, 38, 101]
-                expected_pattern = [100, 38, 101]
-                columns = [left_col, center_col, right_col]
-                
-                valid = True
-                
-                # Check bottom pillar
-                bottom_row_flipped = (map_height - 1) - bottom_row
-                if bottom_row_flipped < 0 or bottom_row_flipped >= map_height:
-                    valid = False
-                else:
-                    for i, col in enumerate(columns):
-                        actual_tile = visual_map[bottom_row_flipped, col]
-                        expected_tile = expected_pattern[i]
-                        if actual_tile != expected_tile:
-                            valid = False
-                
-                # Check top pillar
-                if valid:
-                    top_row_flipped = (map_height - 1) - top_row
-                    if top_row_flipped < 0 or top_row_flipped >= map_height:
-                        valid = False
-                    else:
-                        for i, col in enumerate(columns):
-                            actual_tile = visual_map[top_row_flipped, col]
-                            expected_tile = expected_pattern[i]
-                            if actual_tile != expected_tile:
-                                valid = False
-                
-                if not valid:
-                    tp['y'] = 0
-                    tp['top_row'] = 0
-                    tp['bottom_row'] = 0
-
-def place_spawn_visualization_tiles(window):
-    """Place spawn tiles in visual maps based on object data"""
-    for map_idx in range(num_maps):
-        objects = window.object_data[0][map_idx]  # Use difficulty 0 as reference
-        
-        # Place player start tile
-        if objects['player_start']['y'] != 0:
-            row_from_bottom = objects['player_start']['x'] // 0x08
-            row = (map_height - 1) - row_from_bottom
-            col = objects['player_start']['y'] // 0x08
-            
-            if 0 <= row < map_height and 0 <= col < map_width:
-                visual_maps[map_idx][row, col] = 0x29
-        
-        # Place respawn flame tiles
-        for i in range(objects['respawn_count']):
-            respawn = objects['respawns'][i]
-            if respawn['y'] != 0:
-                row_from_bottom = respawn['x'] // 0x08
-                row = (map_height - 1) - row_from_bottom
-                col = respawn['y'] // 0x08
-                if 0 <= row < map_height and 0 <= col < map_width:
-                    visual_maps[map_idx][row, col] = 0x17
-        
-        # Place keyhole tiles
-        for item in objects['items']:
-            if item['active'] and item['tile_id'] == 0x72:
-                col = item['y'] // 0x08
-                row_from_bottom = item['x'] // 0x08
-                row = (map_height - 1) - row_from_bottom
-                if 0 <= row < map_height and 0 <= col < map_width:
-                    visual_maps[map_idx][row, col] = 0x72
-
-def validate_filled_boxes(window):
-    """Check for filled boxes on visual layer and fix them"""
-    for map_idx in range(num_maps):
-        visual_map = visual_maps[map_idx]
-        for row in range(map_height):
-            for col in range(map_width):
-                tile = visual_map[row, col]
-                if tile in FILLED_TO_EMPTY:
-                    x = row * 0x08
-                    y = col * 0x08
-                    
-                    has_object = False
-                    for item in window.object_data[0][map_idx]['items']:
-                        if item['active'] and item['x'] == x and item['y'] == y:
-                            has_object = True
-                            break
-                    
-                    if has_object:
-                        visual_map[row, col] = FILLED_TO_EMPTY[tile]
-                    else:
-                        visual_map[row, col] = empty_path_tile
-
-def initialize_map_editor_state(window):
-    """Initialize all state variables for the map editor"""
-    
-    # Selection state
-    window.selected_map = 0
-    window.selected_tile = 0
-    window.difficulty = 0
-    window.selected_object_type = None  # 'spawner', 'teleporter', 'player_start', etc.
-    
-    # Object placement state
-    window.teleporter_first_marker = None
-    window.dragging_object = None
-    window.drag_ghost_pos = None
-    window.selected_door = None
-    window.door_drag_start = None
-    window.door_ghost_pos = None
-    
-    # Display settings
-    window.zoom_level = 3.0
-    window.show_grid = tk.BooleanVar(value=False)
-    window.show_objects = tk.BooleanVar(value=True)
-    
-    # Status variables
-    window.status_var = tk.StringVar(value="Ready")
-    window.coord_var = tk.StringVar(value="")
-    
-    # Modification tracking
-    window.modified = False
-    
-    # Image references (prevent garbage collection)
-    window.tile_images = []
-    window._overlay_images = []
-    window.current_map_image = None
-    
-    # Button references for highlighting
-    window.map_buttons = {}
-    
-    # Load object data for ALL difficulties
-    window.object_data = {}
-    for diff in range(NUM_DIFFICULTIES):
-        window.object_data[diff] = {}
-        for i in range(num_maps):
-            window.object_data[diff][i] = load_object_data(i, diff)
-    
-    # Load map configuration data
-    window.map_config = {}
-    for diff in range(NUM_DIFFICULTIES):
-        window.map_config[diff] = {}
-        for map_idx in range(num_maps):
-            window.map_config[diff][map_idx] = load_map_config(map_idx, diff)
-    
-    # Validate and fix invalid teleporters
-    validate_teleporters(window)
-    
-    # Place spawn tiles in visual maps (use difficulty 0 as reference)
-    place_spawn_visualization_tiles(window)
-    
-    # Find composite objects
-    window.door_positions = {}
-    window.spawner_positions = {}
-    window.teleporter_positions = {}
-    for i in range(num_maps):
-        window.door_positions[i] = find_door(i)
-        window.spawner_positions[i] = find_spawners(i)
-        window.teleporter_positions[i] = find_teleporters(i)
-    
-    # Validate filled boxes
-    validate_filled_boxes(window)
-    
-    logging.info("Map editor state initialized")
-
 #########################################
 # High Score Handling Functions
 #########################################
@@ -1426,106 +1138,42 @@ def launch_map_editor():
     """Launch the map editor in a new window"""
     global open_windows
     
-    # Check if window already exists
+    # Check if window already exists and is still open
     if open_windows['map_editor'] is not None:
         try:
-            open_windows['map_editor'].lift()
-            open_windows['map_editor'].focus_force()
+            open_windows['map_editor'].lift()  # Bring to front
+            open_windows['map_editor'].focus_force()  # Give it focus
             return
         except tk.TclError:
+            # Window was destroyed but reference wasn't cleared
             open_windows['map_editor'] = None
     
     try:
         # Create new window
         editor_window = tk.Toplevel(root)
         editor_window.title(f"Tutankham Map Editor {EDITOR_VERSION}")
-        
-        # Calculate window size based on map at 3x zoom
-        map_display_width = map_width * 16 * 3  # 3072
-        map_display_height = map_height * 16 * 3  # 576
-        left_panel_width = 255
-        palette_height = 250
-        
-        window_width = left_panel_width + map_display_width + 40
-        window_height = map_display_height + palette_height + 100
-        
-        editor_window.geometry(f"{window_width}x{window_height}")
+        editor_window.geometry("1800x1000")
         
         # Store reference
         open_windows['map_editor'] = editor_window
         
-        # Initialize editor state
-        initialize_map_editor_state(editor_window)
-        
-        # Register callbacks for palette/tile changes
-        def on_palette_changed(palette_idx):
-            # Reload palettes
-            palettes = load_palettes_from_rom()
-            # If this affects our current map, refresh
-            if palette_idx < 4:  # Map palettes
-                if editor_window.selected_map == palette_idx:
-                    render_map_view(editor_window)
-                    render_tile_palette(editor_window)
-            else:  # Unknown palettes - refresh anyway
-                render_map_view(editor_window)
-                render_tile_palette(editor_window)
-        
-        def on_tile_changed(tile_idx):
-            # Tile changed, refresh displays
-            render_map_view(editor_window)
-            render_tile_palette(editor_window)
-        
-        register_callback('palette_changed', on_palette_changed)
-        register_callback('tile_changed', on_tile_changed)
-        
-        # Store callback references for cleanup
-        editor_window._callbacks = [on_palette_changed, on_tile_changed]
-        
         # Clear reference when window is closed
         def on_close():
-            # Check for unsaved changes
-            if editor_window.modified:
-                result = messagebox.askyesnocancel(
-                    "Unsaved Changes",
-                    "You have unsaved changes. Save before closing?",
-                    parent=editor_window
-                )
-                if result is None:  # Cancel
-                    return
-                elif result:  # Yes - save
-                    save_map_editor_data(editor_window)
-            
-            # Unregister callbacks
-            if hasattr(editor_window, '_callbacks'):
-                for cb in editor_window._callbacks:
-                    for event_type in state_callbacks:
-                        if cb in state_callbacks[event_type]:
-                            state_callbacks[event_type].remove(cb)
-            
             open_windows['map_editor'] = None
             editor_window.destroy()
         
         editor_window.protocol("WM_DELETE_WINDOW", on_close)
         
-        # Build the UI
-        build_map_editor_ui(editor_window)
-        
-        # Display initial state
-        render_map_view(editor_window)
-        render_tile_palette(editor_window)
-        update_map_counters(editor_window)
-        update_map_config_display(editor_window)
-        update_tile_info(editor_window)
-        
-        # Set window icon
-        create_window_icon(editor_window, all_tiles, palettes)
-        
-        logging.info("Map editor launched successfully")
+        # Import the MapEditor class from Editor15.py
+        # For now, show a message
+        messagebox.showinfo("Map Editor", "Map Editor will be launched here")
         
     except Exception as e:
         logging.error(f"Error launching map editor: {e}")
         messagebox.showerror("Error", f"Failed to launch map editor:\n{e}")
         open_windows['map_editor'] = None
+
+# Add this to the launch functions section (around line 380):
 
 def launch_tile_editor():
     """Launch the tile/graphics editor"""
@@ -1724,333 +1372,6 @@ def launch_palette_editor():
         logging.error(f"Error launching palette editor: {e}")
         messagebox.showerror("Error", f"Failed to launch palette editor:\n{e}")
         open_windows['palette'] = None
-
-#########################################
-# Map Editor Functions
-#########################################
-
-def build_map_editor_ui(window):
-    """Build the map editor user interface"""
-    
-    # Main container
-    main_frame = ttk.Frame(window)
-    main_frame.pack(fill=tk.BOTH, expand=True)
-    
-    # Left panel (controls)
-    window.left_panel = ttk.Frame(main_frame, width=255)
-    window.left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
-    window.left_panel.pack_propagate(False)
-    
-    # Right panel (map and palette)
-    right_panel = ttk.Frame(main_frame)
-    right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-    
-    # Map frame (top of right panel)
-    map_frame = ttk.LabelFrame(right_panel, text="Map Editor")
-    map_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
-    
-    # Canvas frame with scrollbars
-    canvas_frame = ttk.Frame(map_frame)
-    canvas_frame.pack(fill=tk.BOTH, expand=True)
-    
-    # Calculate map display size
-    map_display_width = map_width * 16 * int(window.zoom_level)
-    map_display_height = map_height * 16 * int(window.zoom_level)
-    
-    # Map canvas
-    window.map_canvas = tk.Canvas(canvas_frame, bg='black', 
-                                  width=map_display_width, 
-                                  height=map_display_height)
-    h_scroll = ttk.Scrollbar(canvas_frame, orient=tk.HORIZONTAL, 
-                            command=window.map_canvas.xview)
-    v_scroll = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL, 
-                            command=window.map_canvas.yview)
-    
-    window.map_canvas.configure(xscrollcommand=h_scroll.set, 
-                               yscrollcommand=v_scroll.set)
-    window.map_canvas.grid(row=0, column=0, sticky='nsew')
-    h_scroll.grid(row=1, column=0, sticky='ew')
-    v_scroll.grid(row=0, column=1, sticky='ns')
-    
-    canvas_frame.grid_rowconfigure(0, weight=1)
-    canvas_frame.grid_columnconfigure(0, weight=1)
-    
-    # Bind events to map canvas
-    window.map_canvas.bind("<Button-1>", lambda e: on_map_click(e, window))
-    window.map_canvas.bind("<Motion>", lambda e: on_map_hover(e, window))
-    window.map_canvas.bind("<B1-Motion>", lambda e: on_map_drag(e, window))
-    window.map_canvas.bind("<ButtonRelease-1>", lambda e: on_map_release(e, window))
-    window.map_canvas.bind("<Button-3>", lambda e: on_map_right_click(e, window))
-    window.bind("<Escape>", lambda e: on_escape_key(e, window))
-    
-    # Palette frame (bottom of right panel)
-    palette_frame = ttk.LabelFrame(right_panel, text="Tile Palette")
-    palette_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, padx=5, pady=5)
-    
-    # Palette canvas with scrollbars
-    palette_canvas_frame = ttk.Frame(palette_frame)
-    palette_canvas_frame.pack(fill=tk.BOTH, expand=True)
-    
-    window.palette_canvas = tk.Canvas(palette_canvas_frame, height=250, bg='#2b2b2b')
-    palette_scroll_h = ttk.Scrollbar(palette_canvas_frame, orient=tk.HORIZONTAL,
-                                    command=window.palette_canvas.xview)
-    palette_scroll_v = ttk.Scrollbar(palette_canvas_frame, orient=tk.VERTICAL,
-                                    command=window.palette_canvas.yview)
-    
-    window.palette_canvas.configure(xscrollcommand=palette_scroll_h.set,
-                                   yscrollcommand=palette_scroll_v.set)
-    window.palette_canvas.grid(row=0, column=0, sticky='nsew')
-    palette_scroll_h.grid(row=1, column=0, sticky='ew')
-    palette_scroll_v.grid(row=0, column=1, sticky='ns')
-    
-    palette_canvas_frame.grid_rowconfigure(0, weight=1)
-    palette_canvas_frame.grid_columnconfigure(0, weight=1)
-    
-    # Build left panel contents
-    build_left_panel(window)
-    
-    logging.info("Map editor UI built")
-
-def build_left_panel(window):
-    """Build the left control panel"""
-    
-    # Map/Difficulty Selection
-    ttk.Label(window.left_panel, text="Map/Difficulty Selection", 
-             font=('Arial', 10, 'bold')).pack(pady=5)
-    
-    # Map buttons with difficulty sub-buttons
-    for i in range(num_maps):
-        map_frame = ttk.Frame(window.left_panel)
-        map_frame.pack(fill=tk.X, padx=5, pady=2)
-        
-        # Map button
-        map_btn = ttk.Button(map_frame, text=f"Map {i + 1}", width=7,
-                            command=lambda idx=i: on_map_select(idx, window))
-        map_btn.pack(side=tk.LEFT, padx=2)
-        window.map_buttons[('map', i)] = map_btn
-        
-        # Difficulty buttons
-        for d in range(NUM_DIFFICULTIES):
-            diff_btn = ttk.Button(map_frame, text=str(d+1), width=2,
-                                 command=lambda idx=i, diff=d: select_map_and_difficulty(idx, diff, window))
-            diff_btn.pack(side=tk.LEFT, padx=1)
-            window.map_buttons[(i, d)] = diff_btn
-    
-    update_selection_highlight(window)
-    
-    ttk.Separator(window.left_panel, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-    
-    # Map Config
-    ttk.Label(window.left_panel, text="Map Config", 
-             font=('Arial', 10, 'bold')).pack(pady=5)
-    config_frame = ttk.Frame(window.left_panel)
-    config_frame.pack(fill=tk.X, padx=5)
-    
-    # Time Limit
-    time_frame = ttk.Frame(config_frame)
-    time_frame.pack(fill=tk.X, pady=2)
-    ttk.Label(time_frame, text="Time:").pack(side=tk.LEFT)
-    window.time_limit_var = tk.StringVar()
-    time_entry = ttk.Entry(time_frame, textvariable=window.time_limit_var, width=5)
-    time_entry.pack(side=tk.LEFT, padx=5)
-    ttk.Label(time_frame, text="sec").pack(side=tk.LEFT)
-    ttk.Button(time_frame, text="Set", width=5, 
-              command=lambda: set_time_limit(window)).pack(side=tk.LEFT, padx=5)
-    
-    # Spawn Rate
-    spawn_frame = ttk.Frame(config_frame)
-    spawn_frame.pack(fill=tk.X, pady=2)
-    ttk.Label(spawn_frame, text="Spawn:").pack(side=tk.LEFT)
-    window.spawn_rate_var = tk.StringVar()
-    spawn_entry = ttk.Entry(spawn_frame, textvariable=window.spawn_rate_var, width=5)
-    spawn_entry.pack(side=tk.LEFT, padx=5)
-    ttk.Label(spawn_frame, text="(1-14)").pack(side=tk.LEFT)
-    ttk.Button(spawn_frame, text="Set", width=5,
-              command=lambda: set_spawn_rate(window)).pack(side=tk.LEFT, padx=5)
-    
-    ttk.Separator(window.left_panel, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-    
-    # Object Counts
-    ttk.Label(window.left_panel, text="Object Counts", 
-             font=('Arial', 10, 'bold')).pack(pady=5)
-    window.counter_frame = ttk.Frame(window.left_panel)
-    window.counter_frame.pack(fill=tk.X, padx=5)
-    
-    window.items_label = ttk.Label(window.counter_frame, text="Items: 0/14")
-    window.items_label.pack(anchor=tk.W)
-    window.teleports_label = ttk.Label(window.counter_frame, text="Teleports: 0/6")
-    window.teleports_label.pack(anchor=tk.W)
-    window.spawners_label = ttk.Label(window.counter_frame, text="Spawners: 0/7")
-    window.spawners_label.pack(anchor=tk.W)
-    window.respawns_label = ttk.Label(window.counter_frame, text="Respawns: 0/3")
-    window.respawns_label.pack(anchor=tk.W)
-    
-    window.validation_label = ttk.Label(window.counter_frame, text="", 
-                                       foreground="red",
-                                       font=('Arial', 8, 'bold'))
-    window.validation_label.pack(anchor=tk.W, pady=5)
-    
-    ttk.Separator(window.left_panel, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-    
-    # Display Options
-    ttk.Label(window.left_panel, text="Display", 
-             font=('Arial', 10, 'bold')).pack(pady=5)
-    ttk.Checkbutton(window.left_panel, text="Show Grid", 
-                   variable=window.show_grid,
-                   command=lambda: render_map_view(window)).pack(anchor=tk.W, padx=5)
-    ttk.Checkbutton(window.left_panel, text="Show Objects",
-                   variable=window.show_objects,
-                   command=lambda: render_map_view(window)).pack(anchor=tk.W, padx=5)
-    
-    # Coordinates display
-    coord_frame = ttk.Frame(window.left_panel)
-    coord_frame.pack(fill=tk.X, padx=5, pady=2)
-    ttk.Label(coord_frame, text="Coords:").pack(side=tk.LEFT)
-    ttk.Label(coord_frame, textvariable=window.coord_var).pack(side=tk.LEFT, padx=5)
-    
-    # Zoom controls
-    zoom_frame = ttk.Frame(window.left_panel)
-    zoom_frame.pack(fill=tk.X, padx=5, pady=10)
-    ttk.Label(zoom_frame, text="Zoom:").pack(side=tk.LEFT)
-    ttk.Button(zoom_frame, text="-", width=3, 
-              command=lambda: zoom_out(window)).pack(side=tk.LEFT, padx=2)
-    window.zoom_label = ttk.Label(zoom_frame, text=f"{int(window.zoom_level)}x")
-    window.zoom_label.pack(side=tk.LEFT, padx=2)
-    ttk.Button(zoom_frame, text="+", width=3,
-              command=lambda: zoom_in(window)).pack(side=tk.LEFT, padx=2)
-    
-    # Selected tile preview
-    selected_frame = ttk.Frame(window.left_panel)
-    selected_frame.pack(fill=tk.X, padx=5, pady=10)
-    window.tile_info_var = tk.StringVar(value="Selected: None")
-    ttk.Label(selected_frame, textvariable=window.tile_info_var).pack(side=tk.LEFT, pady=2)
-    window.selected_tile_preview = tk.Label(selected_frame, bg='#2b2b2b')
-    window.selected_tile_preview.pack(side=tk.LEFT, padx=10)
-    
-    ttk.Separator(window.left_panel, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-    
-    # Save buttons at bottom
-    status_frame = ttk.Frame(window.left_panel)
-    status_frame.pack(side=tk.BOTTOM, fill=tk.X)
-    ttk.Label(status_frame, text="File Operations", 
-             font=('Arial', 10, 'bold')).pack(pady=5)
-    button_frame = ttk.Frame(status_frame)
-    button_frame.pack(side=tk.TOP, fill=tk.X, pady=2)
-    ttk.Button(button_frame, text="Save", 
-              command=lambda: save_map_editor_data(window)).pack(side=tk.LEFT, padx=2)
-    ttk.Button(button_frame, text="Save As",
-              command=lambda: save_map_editor_as(window)).pack(side=tk.RIGHT, padx=2)
-    ttk.Label(status_frame, textvariable=window.status_var, 
-             relief=tk.SUNKEN).pack(fill=tk.X, padx=5, pady=2)
-
-def update_selection_highlight(window):
-    """Update button states to show current selection"""
-    # Reset all buttons to normal state
-    for key, btn in window.map_buttons.items():
-        btn.state(['!pressed'])
-    
-    # Highlight selected map button
-    if ('map', window.selected_map) in window.map_buttons:
-        window.map_buttons[('map', window.selected_map)].state(['pressed'])
-    
-    # Highlight selected difficulty button
-    if (window.selected_map, window.difficulty) in window.map_buttons:
-        window.map_buttons[(window.selected_map, window.difficulty)].state(['pressed'])
-
-def on_map_select(map_idx, window):
-    """Handle map selection"""
-    # TODO: Implement
-    pass
-
-def select_map_and_difficulty(map_idx, diff, window):
-    """Handle map and difficulty selection"""
-    # TODO: Implement
-    pass
-
-def set_time_limit(window):
-    """Set time limit for current map/difficulty"""
-    # TODO: Implement
-    pass
-
-def set_spawn_rate(window):
-    """Set spawn rate for current map/difficulty"""
-    # TODO: Implement
-    pass
-
-def zoom_in(window):
-    """Zoom in on map"""
-    # TODO: Implement
-    pass
-
-def zoom_out(window):
-    """Zoom out on map"""
-    # TODO: Implement
-    pass
-
-def on_map_click(event, window):
-    """Handle map canvas click"""
-    # TODO: Implement
-    pass
-
-def on_map_hover(event, window):
-    """Handle map canvas hover"""
-    # TODO: Implement
-    pass
-
-def on_map_drag(event, window):
-    """Handle map canvas drag"""
-    # TODO: Implement
-    pass
-
-def on_map_release(event, window):
-    """Handle map canvas button release"""
-    # TODO: Implement
-    pass
-
-def on_map_right_click(event, window):
-    """Handle map canvas right click"""
-    # TODO: Implement
-    pass
-
-def on_escape_key(event, window):
-    """Handle escape key"""
-    # TODO: Implement
-    pass
-
-def save_map_editor_as(window):
-    """Save map data to a new location"""
-    # TODO: Implement
-    pass
-
-def render_map_view(window):
-    """Render the map display"""
-    # TODO: Implement map rendering
-    pass
-
-def render_tile_palette(window):
-    """Render the tile palette"""
-    # TODO: Implement palette rendering
-    pass
-
-def update_map_counters(window):
-    """Update object counters"""
-    # TODO: Implement counter updates
-    pass
-
-def update_map_config_display(window):
-    """Update map config display"""
-    # TODO: Implement config display
-    pass
-
-def update_tile_info(window):
-    """Update selected tile info"""
-    # TODO: Implement tile info
-    pass
-
-def save_map_editor_data(window):
-    """Save all map editor data"""
-    # TODO: Implement save functionality
-    pass
 
 #########################################
 # UI Graphics Editor Functions
@@ -3138,10 +2459,7 @@ def apply_palette_color(window, dialog, palette_idx, color_idx, red_var, green_v
         rebuild_palette_grid(window)
         
         window.pal_status_label.config(text=f"Updated {PALETTE_NAMES[palette_idx]} color {color_idx}")
-
-        # NOTIFY OTHER WINDOWS
-        trigger_callback('palette_changed', palette_idx)
-
+        
     except Exception as e:
         logging.error(f"Error applying color: {e}")
         messagebox.showerror("Error", f"Failed to apply color:\n{e}")
