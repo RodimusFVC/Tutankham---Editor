@@ -90,27 +90,21 @@ def apply_palette_to_sprite(sprite, palette):
 
 
 # Main display function
-def display_timer_banner():
+def display_stage_banner():
 
     # Timer Banner Graphic
     rom_path = "../j6.6h"
-    offset = 0x08F0  # Relative file offset for Timer Banner
-    sprite_width = 32  # Placeholder width, adjust based on graphic
-    sprite_height = 39  # Calculated: (0xB6F - 0x8F0 + 1) / (32 / 2) = 688 / 16 = 43, but adjust for visible area
-
-#    # Unknown Banner Graphic
-#    rom_path = "./c6.6i"
-#    offset = 0x0E00  # Relative file offset for Timer Banner
-#    sprite_width = 40  # Placeholder width, adjust based on graphic
-#    sprite_height = 32  # Calculated: (0xB6F - 0x8F0 + 1) / (32 / 2) = 688 / 16 = 43, but adjust for visible area
+    offset = 0xC60  # Relative file offset for Timer Banner
+    sprite_width = 30  # Placeholder width, adjust based on graphic
+    sprite_height = 32  # Calculated: (0xB6F - 0x8F0 + 1) / (32 / 2) = 688 / 16 = 43, but adjust for visible area
 
     rom_data = read_rom(rom_path)
     if len(rom_data) != 4096:
         raise ValueError(f"Expected 4096 bytes in {rom_path}, got {len(rom_data)}")
     root = tk.Tk()
-    root.title("Tutankham j6.6h Timer Banner Graphic")
+    root.title("Tutankham j6.6h Stage Banner Graphic")
     zoom_factor = 10
-    sprite = extract_pixels(rom_data, offset, width=sprite_width, height=sprite_height, mode='sprite', bytes_per_row=32)
+    sprite = extract_pixels(rom_data, offset, width=sprite_width, height=sprite_height)
     sprite = np.rot90(sprite, k=1)  # Rotate 90° clockwise, adjust if needed
     color_sprite = apply_palette_to_sprite(sprite, palette)
     img = Image.fromarray(color_sprite[:, :, :3], "RGB").resize((sprite_width * zoom_factor, sprite_height * zoom_factor), Image.NEAREST)
@@ -123,4 +117,4 @@ def display_timer_banner():
 
 # Run
 if __name__ == "__main__":
-    display_timer_banner()
+    display_stage_banner()

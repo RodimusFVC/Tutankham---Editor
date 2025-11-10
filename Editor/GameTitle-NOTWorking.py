@@ -88,39 +88,52 @@ def apply_palette_to_sprite(sprite, palette):
                 ]
     return color_sprite
 
-
 # Main display function
-def display_timer_banner():
+def display_geniecounter():
 
-    # Timer Banner Graphic
-    rom_path = "../j6.6h"
-    offset = 0x08F0  # Relative file offset for Timer Banner
-    sprite_width = 32  # Placeholder width, adjust based on graphic
-    sprite_height = 39  # Calculated: (0xB6F - 0x8F0 + 1) / (32 / 2) = 688 / 16 = 43, but adjust for visible area
+    rom_path = "../c7.7i"
+    zoom_factor=30 
 
-#    # Unknown Banner Graphic
-#    rom_path = "./c6.6i"
-#    offset = 0x0E00  # Relative file offset for Timer Banner
-#    sprite_width = 40  # Placeholder width, adjust based on graphic
-#    sprite_height = 32  # Calculated: (0xB6F - 0x8F0 + 1) / (32 / 2) = 688 / 16 = 43, but adjust for visible area
+#    rom_path = "../c6.6i"
+#    offset = 0x0E00  # Relative file offset for Lower Case *a* in Game Title
+#    sprite_width=20    # Genie Lamp Width
+#    sprite_height=20   # Genie Lamp Height
+
+    rom_path = "../c6.6i"
+    offset = 0x0EC0  # Relative file offset for Lower Case *k* in Game Title
+    sprite_width=30    # Genie Lamp Width
+    sprite_height=20   # Genie Lamp Height
+
+#    rom_path = "../c7.7i"
+#    offset = 0x0E00  # Relative file offset for Lower Case *n* in Game Title
+#    sprite_width=20    # Genie Lamp Width
+#    sprite_height=20   # Genie Lamp Height
+
+#    rom_path = "../c8.8i"
+#    offset = 0x0C00  # Relative file offset for Upper Case *T* in Game Title
+#    sprite_width=30    # Genie Lamp Width
+#    sprite_height=25   # Genie Lamp Height
+
 
     rom_data = read_rom(rom_path)
     if len(rom_data) != 4096:
         raise ValueError(f"Expected 4096 bytes in {rom_path}, got {len(rom_data)}")
     root = tk.Tk()
-    root.title("Tutankham j6.6h Timer Banner Graphic")
-    zoom_factor = 10
-    sprite = extract_pixels(rom_data, offset, width=sprite_width, height=sprite_height, mode='sprite', bytes_per_row=32)
-    sprite = np.rot90(sprite, k=1)  # Rotate 90° clockwise, adjust if needed
+    root.title("Tutankham j6.6h Genie Lamp Counter Graphic")
+
+    sprite = extract_pixels(rom_data, offset, height=sprite_height, width=sprite_width)  # 16px = 16 bytes per row (even/odd interleaved)
+
+    sprite = np.rot90(sprite, k=1)  # Rotate 90° clockwise based on your note
     color_sprite = apply_palette_to_sprite(sprite, palette)
-    img = Image.fromarray(color_sprite[:, :, :3], "RGB").resize((sprite_width * zoom_factor, sprite_height * zoom_factor), Image.NEAREST)
+    img = Image.fromarray(color_sprite[:, :, :3], "RGB").resize((sprite_width*zoom_factor, sprite_height*zoom_factor), Image.NEAREST)
     photo = ImageTk.PhotoImage(img)
-    canvas = tk.Canvas(root, width=sprite_width * zoom_factor, height=sprite_height * zoom_factor, bg="#2b2b2b")
+    canvas = tk.Canvas(root, width=sprite_width*zoom_factor, height=sprite_height*zoom_factor, bg="#2b2b2b")  # 32×4, 35×4
     canvas.pack(pady=10)
     canvas.create_image(0, 0, image=photo, anchor="nw")
     canvas.image_refs = [photo]  # Keep reference to avoid garbage collection
+
     root.mainloop()
 
 # Run
 if __name__ == "__main__":
-    display_timer_banner()
+    display_geniecounter()

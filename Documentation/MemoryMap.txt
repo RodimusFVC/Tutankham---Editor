@@ -392,12 +392,12 @@
 | j6.6h  | 0x0520-0x053F   | 32B   | Font Graphic : Y                | 8×8px, 4bpp                |
 | j6.6h  | 0x0540-0x055F   | 32B   | Font Graphic : Z                | 8×8px, 4bpp                |
 | j6.6h  | 0xF560-0xF59F   | 64B   | Player Weapon/Bullet Sprite     | Needs Decode               |
-| j6.6h  | 0xF5A0-0xF5BF   | 32B   | Player Count Sprite             | Needs Decode               |
-| j6.6h  | 0xF5C0-0xF8EF   | 815B  | Copyright Graphic               | 32×102px,4bpp, interleaved |
-| j6.6h  | 0xF8F0-0xFB5F   | 624B  | Timer Banner Graphic            | 32x39px,4bpp,noninterleaved|
-| j6.6h  | 0xFB60-0xFBDF   | 128B  | Smart Bomb/Genie Lamp Sprite    | 32x14px, 4bpp, interleaved |
+| j6.6h  | 0xF5A0-0xF5BF   | 32B   | Player Count Sprite             | 8x8px, 4bpp, interleaved   |
+| j6.6h  | 0xF5C0-0xF8EF   | 815B  | Copyright Graphic               | 102x16px,4bpp, interleaved |
+| j6.6h  | 0xF8F0-0xFB5F   | 624B  | Timer Banner Graphic            | 32x39px, 4bpp, interleaved |
+| j6.6h  | 0xFB60-0xFBDF   | 128B  | Smart Bomb/Genie Lamp Sprite    | 16x14px, 4bpp, interleaved |
 | j6.6h  | 0xFBE0-0xFC5F   | 128B  | Unknown Graphic(s)              | Likely UI element          |
-| j6.6h  | 0xFC60-0xFE3F   | 480B  | Level Banner Graphic            | Needs Decode               |
+| j6.6h  | 0xFC60-0xFE3F   | 480B  | Stage Banner Graphic            | 30x32px, 4bpp, interleaved |
 | j6.6h  | 0xFE40-0xFFF7   | 440B  | Padding / Unused Bytes (0xFF)   | Unprogrammed Bytes         |
 | j6.6h  | 0xFFF8-0xFFF9   | 2B    | Code Execution Start Address    | Value: A0 06               |
 | j6.6h  | 0xFFFA-0xFFFD   | 4B    | Padding / Unused Bytes (0xFF)   | Unprogrammed Bytes         |
@@ -576,9 +576,9 @@
 | c8.8i  | 0x17900-0x17BFF | 768B  | Visual Map 4 (Tile Mapping)     | Bank 0x07, mapped to 0x9900|
 | c8.8i  | 0x17C00-0x17FF8 | 1017B | Unknown Graphic(s)              | Likely Tutankham Logo GFX  |
 | c8.8i  | 0x17FF9-0x17FFF | 7B    | Padding / Unused Bytes (0xFF)   | Unprogrammed Bytes         |
-| c9.9i  | 0x18000-0x183DD | 990B  | Treasure 1 (Map)                | Bank 0x08, mapped to 0x9000|
-| c9.9i  | 0x183DE-0x187BB | 990B  | Treasure 2 (Genie Lamp)         | Bank 0x08, mapped to 0x93DE|
-| c9.9i  | 0x187BC-0x18B99 | 990B  | Treasure 3 (Treasure Chest)     | Bank 0x08, mapped to 0x97BC|
-| c9.9i  | 0x18B9A-0x18F77 | 990B  | Treasure 4 (Tutankham Mask)     | Bank 0x08, mapped to 0x9B9A|
+| c9.9i  | 0x18000-0x183DD | 990B  | Treasure 1 (Map)                | 44x44px, 4bpp, interleaved |
+| c9.9i  | 0x183DE-0x187BB | 990B  | Treasure 2 (Genie Lamp)         | 44x44px, 4bpp, interleaved |
+| c9.9i  | 0x187BC-0x18B99 | 990B  | Treasure 3 (Treasure Chest)     | 44x44px, 4bpp, interleaved |
+| c9.9i  | 0x18B9A-0x18F77 | 990B  | Treasure 4 (Tutankham Mask)     | 44x44px, 4bpp, interleaved |
 | c9.9i  | 0x18F78-0x18F8D | 22B   | Extra Graphics Padding (0x11)   | Likely Error Bytes, ignored|
 | c9.9i  | 0x18F8E-0x18FFF | 114B  | Padding / Unused Bytes (0xFF)   | Unprogrammed Bytes         |
