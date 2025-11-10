@@ -275,6 +275,108 @@ TILE_NAMES = {
     0x4C: "Score Box - 3000 (Unused)",
     0x7F: "Rock? (Unused)"
 }
+
+# UI Graphics configuration
+UI_GRAPHICS_CONFIG = {
+    "Copyright Notice": {
+        'rom': 'j6.6h',
+        'offset': 0x05C0,
+        'width': 16,
+        'height': 102,
+        'mode': 'sprite',
+        'bytes_per_row': 16,
+        'rotate': True,
+        'zoom': 5,
+        'description': 'Copyright symbol displayed on title screen'
+    },
+    "Timer Banner": {
+        'rom': 'j6.6h',
+        'offset': 0x08F0,
+        'width': 32,
+        'height': 39,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 6,
+        'description': 'Timer display banner at top of screen'
+    },
+    "Player Counter": {
+        'rom': 'j6.6h',
+        'offset': 0x05A0,
+        'width': 8,
+        'height': 8,
+        'mode': 'sprite',
+        'bytes_per_row': 8,
+        'rotate': True,
+        'zoom': 10,
+        'description': 'Player life counter icon'
+    },
+    "Smart Bomb Counter": {
+        'rom': 'j6.6h',
+        'offset': 0x0B70,
+        'width': 16,
+        'height': 14,
+        'mode': 'sprite',
+        'bytes_per_row': 16,
+        'rotate': True,
+        'zoom': 10,
+        'description': 'Genie lamp/smart bomb counter icon'
+    },
+    "Stage Banner": {
+        'rom': 'j6.6h',
+        'offset': 0x0C60,
+        'width': 30,
+        'height': 32,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'Stage number banner display'
+    }
+}
+
+# Treasure graphics configuration (separate from UI graphics)
+TREASURE_GRAPHICS_CONFIG = {
+    "Treasure 1 (Map)": {
+        'rom': 'c9.9i',
+        'offset': 0x0000,
+        'width': 44,
+        'height': 44,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'End of level treasure - World Map'
+    },
+    "Treasure 2 (Genie Lamp)": {
+        'rom': 'c9.9i',
+        'offset': 0x03DE,
+        'width': 44,
+        'height': 44,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'End of level treasure - Genie Lamp'
+    },
+    "Treasure 3 (Treasure Chest)": {
+        'rom': 'c9.9i',
+        'offset': 0x07BC,
+        'width': 44,
+        'height': 44,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'End of level treasure - Treasure Chest'
+    },
+    "Treasure 4 (Tut Mask)": {
+        'rom': 'c9.9i',
+        'offset': 0x0B9A,
+        'width': 44,
+        'height': 44,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'End of level treasure - Tutankhamun Mask'
+    }
+}
+
 FONT_NAMES = {
     # Digits (0x0000-0x013F, 10 chars × 32 bytes)
     0: "0",   1: "1",  2: "2",  3: "3",  4: "4",
@@ -290,6 +392,16 @@ FONT_NAMES = {
     37: "U", 38: "V", 39: "W", 40: "X", 41: "Y", 
     42: "Z"
 }
+PALETTE_NAMES = [
+    "Map 1 Colors",
+    "Map 2 Colors", 
+    "Map 3 Colors",
+    "Map 4 Colors",
+    "Unknown 1",
+    "Unknown 2",
+    "Unknown 3"
+]
+
 #########################################
 # Code Starts Here
 #########################################
@@ -1131,11 +1243,69 @@ def launch_font_editor():
 
 def launch_ui_graphics_editor():
     """Launch the UI graphics editor"""
-    messagebox.showinfo("UI Graphics", "UI Graphics Editor - Coming soon!")
+    global open_windows
+    
+    if open_windows['ui_graphics'] is not None:
+        try:
+            open_windows['ui_graphics'].lift()
+            open_windows['ui_graphics'].focus_force()
+            return
+        except tk.TclError:
+            open_windows['ui_graphics'] = None
+    
+    try:
+        editor_window = tk.Toplevel(root)
+        editor_window.title(f"Tutankham UI Graphics Editor {EDITOR_VERSION}")
+        editor_window.geometry("800x900")
+        
+        open_windows['ui_graphics'] = editor_window
+        
+        def on_close():
+            open_windows['ui_graphics'] = None
+            editor_window.destroy()
+        
+        editor_window.protocol("WM_DELETE_WINDOW", on_close)
+        
+        # Build UI graphics editor
+        build_ui_graphics_window(editor_window)
+        
+    except Exception as e:
+        logging.error(f"Error launching UI graphics editor: {e}")
+        messagebox.showerror("Error", f"Failed to launch UI graphics editor:\n{e}")
+        open_windows['ui_graphics'] = None
 
 def launch_treasure_editor():
     """Launch the treasure graphics editor"""
-    messagebox.showinfo("Treasure Editor", "Treasure Editor - Coming soon!")
+    global open_windows
+    
+    if open_windows['treasure_editor'] is not None:
+        try:
+            open_windows['treasure_editor'].lift()
+            open_windows['treasure_editor'].focus_force()
+            return
+        except tk.TclError:
+            open_windows['treasure_editor'] = None
+    
+    try:
+        editor_window = tk.Toplevel(root)
+        editor_window.title(f"Tutankham Treasure Editor {EDITOR_VERSION}")
+        editor_window.geometry("800x900")
+        
+        open_windows['treasure_editor'] = editor_window
+        
+        def on_close():
+            open_windows['treasure_editor'] = None
+            editor_window.destroy()
+        
+        editor_window.protocol("WM_DELETE_WINDOW", on_close)
+        
+        # Build treasure editor
+        build_treasure_window(editor_window)
+        
+    except Exception as e:
+        logging.error(f"Error launching treasure editor: {e}")
+        messagebox.showerror("Error", f"Failed to launch treasure editor:\n{e}")
+        open_windows['treasure_editor'] = None
 
 def launch_high_score_editor():
     """Launch the high score data editor"""
@@ -1204,6 +1374,327 @@ def launch_palette_editor():
         open_windows['palette'] = None
 
 #########################################
+# UI Graphics Editor Functions
+#########################################
+
+def build_ui_graphics_window(window):
+    """Build unified UI graphics editor"""
+    main_frame = ttk.Frame(window, padding=10)
+    main_frame.pack(fill=tk.BOTH, expand=True)
+    
+    # Title
+    ttk.Label(main_frame, text="Tutankham UI Graphics Editor", 
+             font=('Arial', 16, 'bold')).pack(pady=10)
+    
+    # Instructions
+    info_label = ttk.Label(main_frame, 
+                          text="Select a UI graphic to view and edit",
+                          font=('Arial', 9))
+    info_label.pack(pady=5)
+    
+    ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+    
+    # Control frame
+    control_frame = ttk.Frame(main_frame)
+    control_frame.pack(fill=tk.X, pady=5)
+    
+    # Graphic selector
+    ttk.Label(control_frame, text="Graphic:", font=('Arial', 10)).pack(side=tk.LEFT, padx=5)
+    
+    graphic_types = list(UI_GRAPHICS_CONFIG.keys())
+    
+    window.selected_graphic = tk.StringVar(value=graphic_types[0])
+    graphic_dropdown = ttk.Combobox(control_frame, 
+                                   textvariable=window.selected_graphic,
+                                   values=graphic_types,
+                                   state="readonly", 
+                                   width=25)
+    graphic_dropdown.pack(side=tk.LEFT, padx=5)
+    graphic_dropdown.bind("<<ComboboxSelected>>", 
+                         lambda e: rebuild_ui_graphic_display(window))
+    
+    window._graphic_dropdown = graphic_dropdown
+    
+    # Palette selector
+    ttk.Label(control_frame, text="Palette:", font=('Arial', 10)).pack(side=tk.LEFT, padx=5)
+    window.selected_palette_idx = tk.IntVar(value=0)
+    palette_dropdown = ttk.Combobox(control_frame, 
+                                   values=PALETTE_NAMES,
+                                   state="readonly", 
+                                   width=15)
+    palette_dropdown.current(0)
+    palette_dropdown.pack(side=tk.LEFT, padx=5)
+    palette_dropdown.bind("<<ComboboxSelected>>", 
+                         lambda e: rebuild_ui_graphic_display(window))
+    window._palette_dropdown = palette_dropdown
+    
+    ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+    
+    # Info frame (shows description)
+    info_frame = ttk.Frame(main_frame)
+    info_frame.pack(fill=tk.X, pady=5)
+    window._info_label = ttk.Label(info_frame, text="", 
+                                   font=('Arial', 9, 'italic'),
+                                   foreground='gray')
+    window._info_label.pack()
+    
+    # Display frame
+    display_frame = ttk.Frame(main_frame)
+    display_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+    window._display_frame = display_frame
+    window._display_image = None
+    
+    ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+    
+    # Button frame
+    button_frame = ttk.Frame(main_frame)
+    button_frame.pack(fill=tk.X, pady=10)
+    
+    ttk.Button(button_frame, text="Close", 
+              command=window.destroy).pack(side=tk.RIGHT, padx=5)
+    
+    # Status
+    window.ui_status_frame = ttk.Frame(main_frame)
+    window.ui_status_frame.pack(side=tk.BOTTOM, fill=tk.X)
+    window.ui_status_label = ttk.Label(window.ui_status_frame, 
+                                       text="Select a graphic to view", 
+                                       relief=tk.SUNKEN, anchor=tk.W)
+    window.ui_status_label.pack(fill=tk.X, padx=5, pady=2)
+    
+    # Initial display
+    rebuild_ui_graphic_display(window)
+
+def rebuild_ui_graphic_display(window):
+    """Rebuild display with selected graphic"""
+    display_frame = window._display_frame
+    
+    # Clear existing
+    for widget in display_frame.winfo_children():
+        widget.destroy()
+    
+    # Get config
+    graphic_name = window.selected_graphic.get()
+    config = UI_GRAPHICS_CONFIG.get(graphic_name)
+    if not config:
+        ttk.Label(display_frame, text="Configuration missing for this graphic",
+                 font=('Arial', 12, 'italic')).pack(pady=50)
+        return
+    
+    # Update info label
+    window._info_label.config(text=config.get('description', ''))
+    
+    # Get palette
+    palette_idx = window._palette_dropdown.current()
+    palettes = load_palettes_from_rom()
+    palette = palettes[palette_idx]
+    
+    # Extract pixels
+    rom_data = rom_cache[config['rom']]
+    pixels = extract_pixels(rom_data, config['offset'], 
+                           height=config['height'], 
+                           width=config['width'],
+                           mode=config['mode'],
+                           bytes_per_row=config.get('bytes_per_row'))
+    
+    # Rotate if needed
+    if config.get('rotate'):
+        pixels = np.rot90(pixels, k=1)
+    
+    # Apply palette
+    color_sprite = apply_palette_to_tile(pixels, palette)
+    
+    # Scale
+    zoom = config.get('zoom', 5)
+    sprite_scaled = np.repeat(np.repeat(color_sprite, zoom, axis=0), zoom, axis=1)
+    sprite_rgb = sprite_scaled[:, :, :3]
+    
+    # Convert to image
+    img = Image.fromarray(sprite_rgb.astype('uint8')).convert('RGB')
+    photo = ImageTk.PhotoImage(img)
+    
+    # Display
+    canvas = tk.Canvas(display_frame, width=img.width, height=img.height, 
+                      bg='#2b2b2b', cursor='hand2')
+    canvas.pack(pady=10)
+    canvas.create_image(0, 0, image=photo, anchor='nw')
+    
+    # Store reference
+    window._display_image = photo
+    
+    # Add click handler for future editing
+    canvas.bind('<Button-1>', lambda e: open_ui_graphic_editor(window, graphic_name))
+    
+    window.ui_status_label.config(text=f"Displaying: {graphic_name} - Click to edit (coming soon)")
+
+def open_ui_graphic_editor(window, graphic_name):
+    """Open pixel editor for a UI graphic"""
+    # TODO: Implement pixel-level editor
+    messagebox.showinfo("UI Graphics Editor", 
+                       f"Pixel editor for {graphic_name} coming soon!\n\n"
+                       f"This will allow you to edit individual pixels.")
+
+#########################################
+# Treasure Graphics Editor Functions
+#########################################
+
+def build_treasure_window(window):
+    """Build treasure graphics editor (similar to UI graphics but for treasures)"""
+    main_frame = ttk.Frame(window, padding=10)
+    main_frame.pack(fill=tk.BOTH, expand=True)
+    
+    # Title
+    ttk.Label(main_frame, text="Tutankham Treasure Editor", 
+             font=('Arial', 16, 'bold')).pack(pady=10)
+    
+    # Instructions
+    info_label = ttk.Label(main_frame, 
+                          text="Select an end-of-level treasure to view and edit",
+                          font=('Arial', 9))
+    info_label.pack(pady=5)
+    
+    ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+    
+    # Control frame
+    control_frame = ttk.Frame(main_frame)
+    control_frame.pack(fill=tk.X, pady=5)
+    
+    # Treasure selector
+    ttk.Label(control_frame, text="Treasure:", font=('Arial', 10)).pack(side=tk.LEFT, padx=5)
+    
+    treasure_types = list(TREASURE_GRAPHICS_CONFIG.keys())
+    
+    window.selected_treasure = tk.StringVar(value=treasure_types[0])
+    treasure_dropdown = ttk.Combobox(control_frame, 
+                                    textvariable=window.selected_treasure,
+                                    values=treasure_types,
+                                    state="readonly", 
+                                    width=30)
+    treasure_dropdown.pack(side=tk.LEFT, padx=5)
+    treasure_dropdown.bind("<<ComboboxSelected>>", 
+                          lambda e: rebuild_treasure_display(window))
+    
+    window._treasure_dropdown = treasure_dropdown
+    
+    # Palette selector
+    ttk.Label(control_frame, text="Palette:", font=('Arial', 10)).pack(side=tk.LEFT, padx=5)
+    window.selected_palette_idx = tk.IntVar(value=0)
+    palette_dropdown = ttk.Combobox(control_frame, 
+                                   values=PALETTE_NAMES,
+                                   state="readonly", 
+                                   width=15)
+    palette_dropdown.current(0)
+    palette_dropdown.pack(side=tk.LEFT, padx=5)
+    palette_dropdown.bind("<<ComboboxSelected>>", 
+                         lambda e: rebuild_treasure_display(window))
+    window._palette_dropdown = palette_dropdown
+    
+    ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+    
+    # Info frame
+    info_frame = ttk.Frame(main_frame)
+    info_frame.pack(fill=tk.X, pady=5)
+    window._info_label = ttk.Label(info_frame, text="", 
+                                   font=('Arial', 9, 'italic'),
+                                   foreground='gray')
+    window._info_label.pack()
+    
+    # Display frame
+    display_frame = ttk.Frame(main_frame)
+    display_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+    window._display_frame = display_frame
+    window._display_image = None
+    
+    ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+    
+    # Button frame
+    button_frame = ttk.Frame(main_frame)
+    button_frame.pack(fill=tk.X, pady=10)
+    
+    ttk.Button(button_frame, text="Close", 
+              command=window.destroy).pack(side=tk.RIGHT, padx=5)
+    
+    # Status
+    window.treasure_status_frame = ttk.Frame(main_frame)
+    window.treasure_status_frame.pack(side=tk.BOTTOM, fill=tk.X)
+    window.treasure_status_label = ttk.Label(window.treasure_status_frame, 
+                                             text="Select a treasure to view", 
+                                             relief=tk.SUNKEN, anchor=tk.W)
+    window.treasure_status_label.pack(fill=tk.X, padx=5, pady=2)
+    
+    # Initial display
+    rebuild_treasure_display(window)
+
+def rebuild_treasure_display(window):
+    """Rebuild display with selected treasure"""
+    display_frame = window._display_frame
+    
+    # Clear existing
+    for widget in display_frame.winfo_children():
+        widget.destroy()
+    
+    # Get config
+    treasure_name = window.selected_treasure.get()
+    config = TREASURE_GRAPHICS_CONFIG.get(treasure_name)
+    if not config:
+        ttk.Label(display_frame, text="Configuration missing for this treasure",
+                 font=('Arial', 12, 'italic')).pack(pady=50)
+        return
+    
+    # Update info label
+    window._info_label.config(text=config.get('description', ''))
+    
+    # Get palette
+    palette_idx = window._palette_dropdown.current()
+    palettes = load_palettes_from_rom()
+    palette = palettes[palette_idx]
+    
+    # Extract pixels
+    rom_data = rom_cache[config['rom']]
+    pixels = extract_pixels(rom_data, config['offset'], 
+                           height=config['height'], 
+                           width=config['width'],
+                           mode=config['mode'],
+                           bytes_per_row=config.get('bytes_per_row'))
+    
+    # Rotate if needed
+    if config.get('rotate'):
+        pixels = np.rot90(pixels, k=1)
+    
+    # Apply palette
+    color_sprite = apply_palette_to_tile(pixels, palette)
+    
+    # Scale
+    zoom = config.get('zoom', 5)
+    sprite_scaled = np.repeat(np.repeat(color_sprite, zoom, axis=0), zoom, axis=1)
+    sprite_rgb = sprite_scaled[:, :, :3]
+    
+    # Convert to image
+    img = Image.fromarray(sprite_rgb.astype('uint8')).convert('RGB')
+    photo = ImageTk.PhotoImage(img)
+    
+    # Display
+    canvas = tk.Canvas(display_frame, width=img.width, height=img.height, 
+                      bg='#2b2b2b', cursor='hand2')
+    canvas.pack(pady=10)
+    canvas.create_image(0, 0, image=photo, anchor='nw')
+    
+    # Store reference
+    window._display_image = photo
+    
+    # Add click handler for future editing
+    canvas.bind('<Button-1>', lambda e: open_treasure_editor(window, treasure_name))
+    
+    window.treasure_status_label.config(text=f"Displaying: {treasure_name} - Click to edit (coming soon)")
+
+def open_treasure_editor(window, treasure_name):
+    """Open pixel editor for a treasure graphic"""
+    # TODO: Implement pixel-level editor
+    messagebox.showinfo("Treasure Editor", 
+                       f"Pixel editor for {treasure_name} coming soon!\n\n"
+                       f"This will allow you to edit individual pixels.")
+
+
+#########################################
 # Font Editor Functions
 #########################################
 
@@ -1224,12 +1715,9 @@ def build_font_editor_window(window):
     # Palette selector
     ttk.Label(control_frame, text="Palette:", font=('Arial', 10)).pack(side=tk.LEFT, padx=5)
     
-    palette_names = ["Map 1 Walls", "Map 2 Walls", "Map 3 Walls", "Map 4 Walls",
-                    "Unknown 1", "Unknown 2", "Unknown 3"]
-    
     window.selected_palette_idx = tk.IntVar(value=0)
     palette_dropdown = ttk.Combobox(control_frame, 
-                                   values=palette_names,
+                                   values=PALETTE_NAMES,
                                    state="readonly", 
                                    width=20)
     palette_dropdown.current(0)
@@ -1388,12 +1876,9 @@ def build_tile_editor_window(window):
     # Palette selector
     ttk.Label(control_frame, text="Palette:", font=('Arial', 10)).pack(side=tk.LEFT, padx=5)
     
-    palette_names = ["Map 1 Walls", "Map 2 Walls", "Map 3 Walls", "Map 4 Walls",
-                    "Unknown 1", "Unknown 2", "Unknown 3"]
-    
     window.selected_palette_idx = tk.IntVar(value=0)
     palette_dropdown = ttk.Combobox(control_frame, 
-                                   values=palette_names,
+                                   values=PALETTE_NAMES,
                                    state="readonly", 
                                    width=20)
     palette_dropdown.current(0)
@@ -1781,22 +2266,12 @@ def rebuild_palette_grid(window):
     
     palettes = load_palettes_from_rom()
     
-    palette_names = [
-        "Map 1 Walls",
-        "Map 2 Walls", 
-        "Map 3 Walls",
-        "Map 4 Walls",
-        "Unknown 1",
-        "Unknown 2",
-        "Unknown 3"
-    ]
-    
     # Build each palette row
-    for pal_idx, pal_name in enumerate(palette_names):
+    for pal_idx, pal_name in enumerate(PALETTE_NAMES):
         build_palette_row(window, content_frame, palettes, pal_idx, pal_name)
         
         # Add separator between palettes
-        if pal_idx < len(palette_names) - 1:
+        if pal_idx < len(PALETTE_NAMES) - 1:
             ttk.Separator(content_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
 
 def build_palette_row(window, parent, palettes, palette_idx, palette_name):
@@ -1856,11 +2331,8 @@ def edit_palette_color(window, palette_idx, color_idx):
     main_frame = ttk.Frame(dialog, padding=10)
     main_frame.pack(fill=tk.BOTH, expand=True)
     
-    palette_names = ["Map 1 Walls", "Map 2 Walls", "Map 3 Walls", "Map 4 Walls",
-                    "Unknown 1", "Unknown 2", "Unknown 3"]
-    
     ttk.Label(main_frame, 
-             text=f"{palette_names[palette_idx]} - Color {color_idx}",
+             text=f"{PALETTE_NAMES[palette_idx]} - Color {color_idx}",
              font=('Arial', 12, 'bold')).pack(pady=10)
     
     # Preview frame
@@ -1986,8 +2458,7 @@ def apply_palette_color(window, dialog, palette_idx, color_idx, red_var, green_v
         # Rebuild palette grid
         rebuild_palette_grid(window)
         
-        palette_names = ["Map 1", "Map 2", "Map 3", "Map 4", "Unknown 1", "Unknown 2", "Unknown 3"]
-        window.pal_status_label.config(text=f"Updated {palette_names[palette_idx]} color {color_idx}")
+        window.pal_status_label.config(text=f"Updated {PALETTE_NAMES[palette_idx]} color {color_idx}")
         
     except Exception as e:
         logging.error(f"Error applying color: {e}")
