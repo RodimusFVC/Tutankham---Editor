@@ -1,5 +1,5 @@
 # Tutankham---Editor
-UI Based ROM Editor - written in Python/TK for Portability
+GUI Based ROM Editor - written in Python/TK for Portability
 
 Original Game: 
   - Tutankham © 1982 Konami 
