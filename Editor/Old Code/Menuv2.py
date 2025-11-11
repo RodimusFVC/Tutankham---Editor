@@ -463,7 +463,7 @@ def trigger_callback(event_type, *args, **kwargs):
 #########################################
 
 def load_all(location=None):
-    global all_tiles, all_fonts, palettes, high_scores
+    global all_tiles, all_fonts, visual_maps, logical_maps, palettes, high_scores
     
     try:
         # Load all ROMs into memory first
@@ -482,11 +482,13 @@ def load_all(location=None):
         # Load all data
         all_tiles = load_tiles()
         all_fonts = load_fonts()
+        visual_maps = load_visual_maps()
+        logical_maps = load_logical_maps()
         palettes = load_palettes_from_rom()
         high_scores = load_high_scores()
         logging.info(
-                "Data loaded — %d tiles, %d palettes, %d high_scores",
-                len(all_tiles), len(palettes), len(high_scores)
+                "Data loaded — %d tiles, %d visual maps, %d logical maps, %d palettes, %d high_scores",
+                len(all_tiles), len(visual_maps), len(logical_maps), len(palettes), len(high_scores)
             )
     except Exception as e:
         logging.error(f"Error loading ROMs: {e}")
@@ -583,9 +585,11 @@ def save_roms(target_directory):
         # Update checksums before saving
         update_copyright_checksum()
         
-        # Visual maps and logical maps are already in rom_cache from direct writes
-        # High Scores and Palettes are already written to rom_cache
-        # Object data is already written to rom_cache via write_byte_to_roms()
+        # Save to cache
+        save_visual_maps_to_rom(visual_maps)
+        save_logical_maps_to_rom(logical_maps)
+
+        # High Scores and Palettes are already written to the rom_cache - DO NOT SAVE STALE STRUCTURES!!!!
 
         # Write to disk
         save_all_roms(target_directory)
@@ -845,29 +849,19 @@ def get_tile_name(tile_id):
 # Map Handling Functions
 #########################################
 
-def load_visual_map_from_cache(map_index):
-    """Load a single visual map directly from ROM cache"""
+def load_visual_maps():
     map_data = rom_cache[ROM_CONFIG['visual_map_rom']]
-    start_offset = map_index * visual_map_size
-    map_layout = np.zeros((map_height, map_width), dtype=np.uint8)
-    
-    for byte_index in range(visual_map_size):
-        row = (byte_index % map_height)
-        col = (byte_index // map_height)
-        flipped_row = map_height - 1 - row
-        map_layout[flipped_row, col] = map_data[start_offset + byte_index]
-    
-    return map_layout
-
-def write_visual_tile_to_cache(map_index, row, col, tile_id):
-    """Write a single tile directly to ROM cache"""
-    map_data = rom_cache[ROM_CONFIG['visual_map_rom']]
-    
-    flipped_row = map_height - 1 - row
-    byte_index = col * map_height + flipped_row
-    offset = map_index * visual_map_size + byte_index
-    
-    map_data[offset] = tile_id
+    maps = []
+    for map_index in range(num_maps):
+        start_offset = map_index * visual_map_size
+        map_layout = np.zeros((map_height, map_width), dtype=np.uint8)
+        for byte_index in range(visual_map_size):
+            row = (byte_index % map_height)
+            col = (byte_index // map_height)
+            flipped_row = map_height - 1 - row
+            map_layout[flipped_row, col] = map_data[start_offset + byte_index]
+        maps.append(map_layout)
+    return maps
 
 def save_visual_maps_to_rom(maps):
     """Save visual maps to ROM cache"""
@@ -881,38 +875,34 @@ def save_visual_maps_to_rom(maps):
             map_data.append(map_layout[flipped_row, col])
     rom_cache[ROM_CONFIG['visual_map_rom']][:len(map_data)] = map_data
 
-def load_logical_map_from_cache(map_index):
-    """Load a single logical map directly from ROM cache"""
-    rom_index = map_index // 2
-    map_in_rom = map_index % 2
-    
-    rom_name = ROM_CONFIG['logical_map_roms'][rom_index]
-    rom_data = rom_cache[rom_name]
-    
-    start_offset = map_in_rom * logical_map_size
-    map_layout = np.zeros((64, 14, 2), dtype=np.uint8)
-    
-    for tile_row in range(64):
-        row_offset = start_offset + (tile_row * 28)
-        for tile_col in range(14):
-            map_layout[tile_row, tile_col, 0] = rom_data[row_offset + tile_col]
-            map_layout[tile_row, tile_col, 1] = rom_data[row_offset + 14 + tile_col]
-    
-    return map_layout
+def load_logical_maps():
+    logical_maps = []
+    for rom_name in ROM_CONFIG['logical_map_roms']:
+        rom_data = rom_cache[rom_name]
+        for map_in_rom in range(2):
+            start_offset = map_in_rom * logical_map_size
+            map_layout = np.zeros((64, 14, 2), dtype=np.uint8)
+            for tile_row in range(64):
+                row_offset = start_offset + (tile_row * 28)
+                for tile_col in range(14):
+                    map_layout[tile_row, tile_col, 0] = rom_data[row_offset + tile_col]
+                    map_layout[tile_row, tile_col, 1] = rom_data[row_offset + 14 + tile_col]
+            logical_maps.append(map_layout)
+    return logical_maps
 
-def write_logical_tile_to_cache(map_index, logical_row, logical_col, byte_pair):
-    """Write logical bytes directly to ROM cache"""
-    rom_index = map_index // 2
-    map_in_rom = map_index % 2
-    
-    rom_name = ROM_CONFIG['logical_map_roms'][rom_index]
-    rom_data = rom_cache[rom_name]
-    
-    start_offset = map_in_rom * logical_map_size
-    row_offset = start_offset + (logical_row * 28)
-    
-    rom_data[row_offset + logical_col] = byte_pair[0]
-    rom_data[row_offset + 14 + logical_col] = byte_pair[1]
+def save_logical_maps_to_rom(logical_maps):
+    """Save logical maps to ROM cache"""
+    for rom_index, rom_name in enumerate(ROM_CONFIG['logical_map_roms']):
+        rom_data = bytearray()
+        for map_in_rom in range(2):
+            map_index = rom_index * 2 + map_in_rom
+            logical_map = logical_maps[map_index]
+            for tile_row in range(64):
+                for tile_col in range(14):
+                    rom_data.append(logical_map[tile_row, tile_col, 0])
+                for tile_col in range(14):
+                    rom_data.append(logical_map[tile_row, tile_col, 1])
+        rom_cache[rom_name][:len(rom_data)] = rom_data
 
 #########################################
 # Map Configuration Functions
@@ -1094,8 +1084,8 @@ def save_object_data(objects, map_index, difficulty=0):
 #########################################
 
 def find_door(map_index):
-    """Find door position on a map - reads directly from ROM cache"""
-    visual_map = load_visual_map_from_cache(map_index)
+    """Find door position on a map"""
+    visual_map = visual_maps[map_index]
     
     for row in range(map_height - 2):
         for col in range(map_width - 2):
@@ -1116,8 +1106,8 @@ def find_door(map_index):
     return None
 
 def find_spawners(map_index):
-    """Find all spawner positions on a map - reads directly from ROM cache"""
-    visual_map = load_visual_map_from_cache(map_index)
+    """Find all spawner positions on a map by scanning for patterns"""
+    visual_map = visual_maps[map_index]
     spawners = []
     
     # Check each spawner configuration
@@ -1151,10 +1141,13 @@ def find_spawners(map_index):
     return spawners
 
 def find_teleporters(map_index):
-    """Find all teleporter columns - reads directly from ROM cache"""
-    visual_map = load_visual_map_from_cache(map_index)
+    """Find all teleporter columns by checking object data"""
+    # We'll use difficulty 0 as reference for object positions
+    # This is a temporary implementation - will be updated when we refactor object handling
     teleporter_cols = []
     
+    # For now, scan for teleporter pillar tiles
+    visual_map = visual_maps[map_index]
     for col in range(map_width):
         for row in range(map_height):
             if visual_map[row, col] in [100, 101]:  # Teleporter pillar tiles
@@ -1167,7 +1160,7 @@ def find_teleporters(map_index):
 def validate_teleporters(window):
     """Remove teleporter entries that don't have matching visual tiles"""
     for map_idx in range(num_maps):
-        visual_map = load_visual_map_from_cache(map_idx)
+        visual_map = visual_maps[map_idx]
         
         # Check all difficulties for this map
         for diff in range(NUM_DIFFICULTIES):
@@ -1230,7 +1223,7 @@ def validate_teleporters(window):
                     tp['bottom_row'] = 0
 
 def place_spawn_visualization_tiles(window):
-    """Place spawn tiles in visual maps based on object data - writes directly to ROM cache"""
+    """Place spawn tiles in visual maps based on object data"""
     for map_idx in range(num_maps):
         objects = window.object_data[0][map_idx]  # Use difficulty 0 as reference
         
@@ -1241,7 +1234,7 @@ def place_spawn_visualization_tiles(window):
             col = objects['player_start']['y'] // 0x08
             
             if 0 <= row < map_height and 0 <= col < map_width:
-                write_visual_tile_to_cache(map_idx, row, col, 0x29)
+                visual_maps[map_idx][row, col] = 0x29
         
         # Place respawn flame tiles
         for i in range(objects['respawn_count']):
@@ -1251,7 +1244,7 @@ def place_spawn_visualization_tiles(window):
                 row = (map_height - 1) - row_from_bottom
                 col = respawn['y'] // 0x08
                 if 0 <= row < map_height and 0 <= col < map_width:
-                    write_visual_tile_to_cache(map_idx, row, col, 0x17)
+                    visual_maps[map_idx][row, col] = 0x17
         
         # Place keyhole tiles
         for item in objects['items']:
@@ -1260,12 +1253,12 @@ def place_spawn_visualization_tiles(window):
                 row_from_bottom = item['x'] // 0x08
                 row = (map_height - 1) - row_from_bottom
                 if 0 <= row < map_height and 0 <= col < map_width:
-                    write_visual_tile_to_cache(map_idx, row, col, 0x72)
+                    visual_maps[map_idx][row, col] = 0x72
 
 def validate_filled_boxes(window):
-    """Check for filled boxes on visual layer and fix them - writes directly to ROM cache"""
+    """Check for filled boxes on visual layer and fix them"""
     for map_idx in range(num_maps):
-        visual_map = load_visual_map_from_cache(map_idx)
+        visual_map = visual_maps[map_idx]
         for row in range(map_height):
             for col in range(map_width):
                 tile = visual_map[row, col]
@@ -1280,9 +1273,9 @@ def validate_filled_boxes(window):
                             break
                     
                     if has_object:
-                        write_visual_tile_to_cache(map_idx, row, col, FILLED_TO_EMPTY[tile])
+                        visual_map[row, col] = FILLED_TO_EMPTY[tile]
                     else:
-                        write_visual_tile_to_cache(map_idx, row, col, empty_path_tile)
+                        visual_map[row, col] = empty_path_tile
 
 def initialize_map_editor_state(window):
     """Initialize all state variables for the map editor"""
@@ -1292,18 +1285,14 @@ def initialize_map_editor_state(window):
     window.selected_tile = 0
     window.difficulty = 0
     window.selected_object_type = None  # 'spawner', 'teleporter', 'player_start', etc.
-    window.selected_composite = None  # 'teleporter', 'spawner_right', etc.
-    window.selected_spawner_dir = 'right'  # Default spawner direction
     
     # Object placement state
-    window.teleporter_first_pos = None
+    window.teleporter_first_marker = None
     window.dragging_object = None
     window.drag_ghost_pos = None
     window.selected_door = None
     window.door_drag_start = None
     window.door_ghost_pos = None
-    window.selected_player_start = None
-    window.player_start_ghost_pos = None
     
     # Display settings
     window.zoom_level = 3.0
@@ -2051,45 +2040,22 @@ def on_map_click(event, window):
         if not (0 <= row < map_height and 0 <= col < map_width):
             return
         
-        visual_map = load_visual_map_from_cache(window.selected_map)
+        # Check if we can edit (only difficulty 1)
+        if window.difficulty > 0 and window.selected_tile is not None:
+            messagebox.showwarning("Edit Locked", 
+                "Visual/logical map editing is only allowed in Difficulty 1.\n"
+                "Higher difficulties only allow enabling/disabling objects.")
+            return
+        
+        visual_map = visual_maps[window.selected_map]
         
         # Check if clicking on door
         if is_door_tile(row, col, window):
-            if window.difficulty > 0:
-                messagebox.showwarning("Edit Locked", 
-                    "Visual/logical map editing is only allowed in Difficulty 1.")
-                return
             door_pos = window.door_positions[window.selected_map]
             window.selected_door = door_pos
             window.door_drag_start = (row, col)
             window.status_var.set("Door selected - drag to move")
             render_map_view(window)
-            return
-        
-        # Check if clicking on player start marker
-        if visual_map[row, col] == 0x29:
-            if window.difficulty > 0:
-                messagebox.showwarning("Edit Locked", 
-                    "Visual/logical map editing is only allowed in Difficulty 1.")
-                return
-            window.selected_player_start = (row, col)
-            window.status_var.set("Player start selected - drag to move")
-            render_map_view(window)
-            return
-        
-        # Check if clicking on spawner
-        spawner = is_spawner_tile(row, col, window)
-        if spawner:
-            messagebox.showinfo("Spawner", 
-                f"This is a {spawner['direction']} spawner. Right-click to delete.")
-            return
-        
-        # Handle composite object placement
-        if window.selected_composite:
-            if window.selected_composite == 'teleporter':
-                place_teleporter_step(row, col, window)
-            elif window.selected_composite.startswith('spawner_'):
-                place_spawner(row, col, window)
             return
         
         # Handle object marker placement
@@ -2114,41 +2080,32 @@ def is_door_tile(row, col, window):
     return (door_row <= row < door_row + 3 and 
             door_col <= col < door_col + 3)
 
-def is_spawner_tile(row, col, window):
-    """Check if a tile position is part of a spawner"""
-    spawners = window.spawner_positions.get(window.selected_map, [])
-    for spawner in spawners:
-        if (spawner['row'] <= row < spawner['row'] + spawner['height'] and 
-            spawner['col'] <= col < spawner['col'] + spawner['width']):
-            return spawner
-    return None
-
 def clear_door(row, col, window):
-    """Clear door from position - writes directly to ROM cache"""
-    for dr in range(3):
-        for dc in range(3):
-            # Clear visual tile
-            write_visual_tile_to_cache(window.selected_map, row + dr, col + dc, empty_path_tile)
-            
-            # Clear logical bytes
-            logical_row = col + dc
-            logical_col = row + dr + 1
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x00, 0x00])
-
-def place_door_at(row, col, window):
-    """Place door at position - writes directly to ROM cache"""
-    if row + 3 > map_height or col + 3 > map_width:
-        return False
+    """Clear door from position"""
+    visual_map = visual_maps[window.selected_map]
+    logical_map = logical_maps[window.selected_map]
     
     for dr in range(3):
         for dc in range(3):
-            # Write visual tile
-            write_visual_tile_to_cache(window.selected_map, row + dr, col + dc, DOOR_TILES[dr, dc])
-            
-            # Write logical bytes
+            visual_map[row + dr, col + dc] = empty_path_tile
             logical_row = col + dc
             logical_col = row + dr + 1
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, DOOR_LOGICAL[dr, dc])
+            logical_map[logical_row, logical_col] = [0x00, 0x00]
+
+def place_door_at(row, col, window):
+    """Place door at position"""
+    if row + 3 > map_height or col + 3 > map_width:
+        return False
+    
+    visual_map = visual_maps[window.selected_map]
+    logical_map = logical_maps[window.selected_map]
+    
+    for dr in range(3):
+        for dc in range(3):
+            visual_map[row + dr, col + dc] = DOOR_TILES[dr, dc]
+            logical_row = col + dc
+            logical_col = row + dr + 1
+            logical_map[logical_row, logical_col] = DOOR_LOGICAL[dr, dc]
     
     return True
 
@@ -2192,7 +2149,7 @@ def place_object_marker(row, col, window):
         logging.error(f"Error placing object marker: {e}")
 
 def place_tile(row, col, window):
-    """Place a tile on the map - writes directly to ROM cache"""
+    """Place a tile on the map"""
     try:
         # Check if this is a door tile
         if is_door_tile(row, col, window):
@@ -2200,21 +2157,21 @@ def place_tile(row, col, window):
                 "This tile is part of the door. Use drag-and-drop to move the door.")
             return
         
-        # Write visual tile directly to cache
-        write_visual_tile_to_cache(window.selected_map, row, col, window.selected_tile)
+        # Place the tile
+        visual_maps[window.selected_map][row, col] = window.selected_tile
         
-        # Write logical bytes directly to cache
+        # Update logical map
+        logical_map = logical_maps[window.selected_map]
         logical_row = col
         logical_col = row + 1
         
         if window.selected_tile == empty_path_tile:
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x00, 0x00])
+            logical_map[logical_row, logical_col] = [0x00, 0x00]
         else:
             # Check existing logical bytes
-            logical_map = load_logical_map_from_cache(window.selected_map)
             existing_pair = logical_map[logical_row, logical_col]
             if np.array_equal(existing_pair, [0x00, 0x00]) or np.array_equal(existing_pair, [0x55, 0x55]):
-                write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x55, 0x55])
+                logical_map[logical_row, logical_col] = [0x55, 0x55]
         
         mark_modified(window)
         render_map_view(window)
@@ -2222,286 +2179,6 @@ def place_tile(row, col, window):
         
     except Exception as e:
         logging.error(f"Error placing tile: {e}")
-
-def place_spawner(row, col, window):
-    """Place a spawner on the map - writes directly to ROM cache"""
-    if window.difficulty > 0:
-        messagebox.showwarning("Edit Locked", 
-            "Visual/logical map editing is only allowed in Difficulty 1.")
-        return
-    
-    direction = window.selected_spawner_dir
-    config = SPAWNER_CONFIGS[direction]
-    
-    h, w = config['tiles'].shape
-    if row + h > map_height or col + w > map_width:
-        messagebox.showwarning("Invalid Placement", "Spawner doesn't fit")
-        return
-    
-    # Check for overlaps with other composites
-    for dr in range(h):
-        for dc in range(w):
-            check_row = row + dr
-            check_col = col + dc
-            
-            if is_door_tile(check_row, check_col, window):
-                messagebox.showwarning("Invalid Placement", "Would overlap with door")
-                return
-            
-            teleporter_cols = window.teleporter_positions.get(window.selected_map, [])
-            if check_col in teleporter_cols:
-                messagebox.showwarning("Invalid Placement", "Would overlap with teleporter")
-                return
-    
-    # Place spawner tiles
-    for r in range(h):
-        for c in range(w):
-            tile_id = config['tiles'][r, c]
-            write_visual_tile_to_cache(window.selected_map, row + r, col + c, tile_id)
-            
-            # Place logical bytes
-            logical_row = col + c
-            logical_col = row + r + 1
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, config['logical'][r, c])
-    
-    # Add to object data
-    x_coord = row * 0x08
-    y_coord = col * 0x08
-    
-    objects = window.object_data[window.difficulty][window.selected_map]
-    for spawn in objects['spawns']:
-        if spawn['y'] == 0:
-            spawn['y'] = y_coord
-            spawn['x'] = x_coord
-            
-            # Write to ROM cache immediately
-            save_object_data(objects, window.selected_map, window.difficulty)
-            
-            mark_modified(window)
-            render_map_view(window)
-            update_map_counters(window)
-            window.status_var.set(f"Placed {direction} spawner at ({col}, {row})")
-            
-            # Update spawner positions cache
-            window.spawner_positions[window.selected_map] = find_spawners(window.selected_map)
-            return
-    
-    messagebox.showwarning("No Slots", "No empty spawner slots (max 7)")
-
-def delete_spawner(row, col, window):
-    """Delete a spawner at the given position"""
-    if window.difficulty > 0:
-        messagebox.showwarning("Edit Locked", 
-            "Visual/logical map editing is only allowed in Difficulty 1.")
-        return
-    
-    # Find which spawner this tile belongs to
-    spawner = None
-    for s in window.spawner_positions.get(window.selected_map, []):
-        if (s['row'] <= row < s['row'] + s['height'] and 
-            s['col'] <= col < s['col'] + s['width']):
-            spawner = s
-            break
-    
-    if not spawner:
-        return
-    
-    # Clear the spawner tiles
-    for dr in range(spawner['height']):
-        for dc in range(spawner['width']):
-            write_visual_tile_to_cache(window.selected_map, 
-                                       spawner['row'] + dr, 
-                                       spawner['col'] + dc, 
-                                       empty_path_tile)
-            
-            logical_row = spawner['col'] + dc
-            logical_col = spawner['row'] + dr + 1
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x00, 0x00])
-    
-    # Remove from object data
-    x = spawner['row'] * 0x08
-    y = spawner['col'] * 0x08
-    objects = window.object_data[window.difficulty][window.selected_map]
-    for spawn in objects['spawns']:
-        if spawn['x'] == x and spawn['y'] == y:
-            spawn['x'] = 0
-            spawn['y'] = 0
-            
-            # Write to ROM cache immediately
-            save_object_data(objects, window.selected_map, window.difficulty)
-            break
-    
-    mark_modified(window)
-    render_map_view(window)
-    update_map_counters(window)
-    window.status_var.set(f"Deleted {spawner['direction']} spawner")
-    
-    # Update spawner positions cache
-    window.spawner_positions[window.selected_map] = find_spawners(window.selected_map)
-
-def place_teleporter_step(row, col, window):
-    """Two-phase teleporter placement - writes directly to ROM cache"""
-    if window.difficulty > 0:
-        messagebox.showwarning("Edit Locked", 
-            "Visual/logical map editing is only allowed in Difficulty 1.")
-        return
-    
-    if window.teleporter_first_pos is None:
-        # First click - place first horizontal pillar
-        if col - 1 < 0 or col + 1 >= map_width:
-            messagebox.showwarning("Invalid Placement", 
-                "Teleporter must have space for 3 columns (center ±1)")
-            return
-        
-        # Check if these columns already have a teleporter
-        left_col = col - 1
-        right_col = col + 1
-        teleporter_cols = window.teleporter_positions.get(window.selected_map, [])
-        for check_col in [left_col, col, right_col]:
-            if check_col in teleporter_cols:
-                messagebox.showwarning("Invalid Placement", 
-                    f"Column {check_col} already has a teleporter")
-                return
-        
-        # Place first horizontal pillar across 3 columns at this row
-        pillar_pattern = [100, 38, 101]
-        pillar_logical = [[0x55, 0x55], [0x00, 0x00], [0x55, 0x55]]
-        
-        for dc, tile_col in enumerate([left_col, col, right_col]):
-            write_visual_tile_to_cache(window.selected_map, row, tile_col, pillar_pattern[dc])
-            
-            logical_row = tile_col
-            logical_col = row + 1
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, pillar_logical[dc])
-        
-        window.teleporter_first_pos = (row, col)  # Store row and center column
-        mark_modified(window)
-        render_map_view(window)
-        window.status_var.set(
-            f"First pillar at row {row}, columns {left_col}-{right_col}. "
-            f"Place second in SAME COLUMNS, different row (ESC to cancel)")
-    
-    else:
-        # Second click - must be same center column, different row
-        first_row, first_col = window.teleporter_first_pos
-        
-        if col != first_col:
-            messagebox.showwarning("Invalid Placement", 
-                f"Second pillar must be at column {first_col} (same center column as first)")
-            return
-        
-        if row == first_row:
-            messagebox.showwarning("Invalid Placement", 
-                "Second pillar must be at a different row")
-            return
-        
-        if col - 1 < 0 or col + 1 >= map_width:
-            messagebox.showwarning("Invalid Placement", "Teleporter doesn't fit")
-            return
-        
-        # Place second horizontal pillar
-        left_col = col - 1
-        right_col = col + 1
-        pillar_pattern = [100, 38, 101]
-        pillar_logical = [[0x55, 0x55], [0x00, 0x00], [0x55, 0x55]]
-        
-        for dc, tile_col in enumerate([left_col, col, right_col]):
-            write_visual_tile_to_cache(window.selected_map, row, tile_col, pillar_pattern[dc])
-            
-            logical_row = tile_col
-            logical_col = row + 1
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, pillar_logical[dc])
-        
-        # Calculate object data
-        y_coord = col * 0x08  # Center column
-        
-        # Convert rows to coordinates (from bottom)
-        row_from_bottom_1 = (map_height - 1) - first_row
-        row_from_bottom_2 = (map_height - 1) - row
-        
-        row_coord_1 = row_from_bottom_1 * 0x08
-        row_coord_2 = row_from_bottom_2 * 0x08
-        
-        # Determine which is bottom (lower row number) and top (higher row number)
-        bottom_row_coord = min(row_coord_1, row_coord_2)
-        top_row_coord = max(row_coord_1, row_coord_2)
-        
-        # Add to object data
-        objects = window.object_data[window.difficulty][window.selected_map]
-        for tp in objects['teleports']:
-            if tp['y'] == 0:
-                tp['y'] = y_coord
-                tp['bottom_row'] = bottom_row_coord
-                tp['top_row'] = top_row_coord
-                
-                # Write to ROM cache immediately
-                save_object_data(objects, window.selected_map, window.difficulty)
-                
-                # Update teleporter positions cache
-                if window.selected_map not in window.teleporter_positions:
-                    window.teleporter_positions[window.selected_map] = []
-                if col not in window.teleporter_positions[window.selected_map]:
-                    window.teleporter_positions[window.selected_map].append(col)
-                
-                mark_modified(window)
-                render_map_view(window)
-                update_map_counters(window)
-                window.status_var.set(
-                    f"Placed teleporter pair at column {col}, rows {first_row} and {row}")
-                window.teleporter_first_pos = None
-                return
-        
-        messagebox.showwarning("No Slots", "No empty teleporter slots (max 6)")
-        window.teleporter_first_pos = None
-
-def delete_teleporter(col, window):
-    """Delete a teleporter pair in the given column"""
-    if window.difficulty > 0:
-        messagebox.showwarning("Edit Locked", 
-            "Visual/logical map editing is only allowed in Difficulty 1.")
-        return
-    
-    teleporter_cols = window.teleporter_positions.get(window.selected_map, [])
-    if col not in teleporter_cols:
-        return
-    
-    # Clear all teleporter tiles in this column and adjacent columns
-    left_col = col - 1
-    right_col = col + 1
-    
-    if left_col < 0 or right_col >= map_width:
-        return
-    
-    for row in range(map_height):
-        for check_col in [left_col, col, right_col]:
-            tile_id = load_visual_map_from_cache(window.selected_map)[row, check_col]
-            if tile_id in [100, 38, 101]:  # Teleporter tiles
-                write_visual_tile_to_cache(window.selected_map, row, check_col, empty_path_tile)
-                
-                logical_row = check_col
-                logical_col = row + 1
-                write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x00, 0x00])
-    
-    # Remove from object data
-    y_coord = col * 0x08
-    objects = window.object_data[window.difficulty][window.selected_map]
-    for tp in objects['teleports']:
-        if tp['y'] == y_coord:
-            tp['y'] = 0
-            tp['bottom_row'] = 0
-            tp['top_row'] = 0
-            
-            # Write to ROM cache immediately
-            save_object_data(objects, window.selected_map, window.difficulty)
-            break
-    
-    # Remove from teleporter positions cache
-    window.teleporter_positions[window.selected_map].remove(col)
-    
-    mark_modified(window)
-    render_map_view(window)
-    update_map_counters(window)
-    window.status_var.set(f"Deleted teleporter pair in column {col}")
 
 def on_map_hover(event, window):
     """Handle map canvas hover"""
@@ -2588,18 +2265,6 @@ def on_map_right_click(event, window):
         if not (0 <= row < map_height and 0 <= col < map_width):
             return
         
-        # Check if clicking on spawner
-        spawner = is_spawner_tile(row, col, window)
-        if spawner:
-            delete_spawner(row, col, window)
-            return
-        
-        # Check if clicking on teleporter column
-        teleporter_cols = window.teleporter_positions.get(window.selected_map, [])
-        if col in teleporter_cols:
-            delete_teleporter(col, window)
-            return
-        
         # Convert to game coordinates (with proper flip)
         row_from_bottom = (map_height - 1) - row  # Flip row
         x = row_from_bottom * 0x08
@@ -2611,8 +2276,6 @@ def on_map_right_click(event, window):
         for item in objects['items']:
             if item['active'] and item['x'] == x and item['y'] == y:
                 item['active'] = False
-                # Write to ROM cache immediately
-                save_object_data(objects, window.selected_map, window.difficulty)
                 mark_modified(window)
                 window.status_var.set(f"Deleted item at ({col}, {row})")
                 render_map_view(window)
@@ -2627,21 +2290,17 @@ def on_map_right_click(event, window):
                     objects['respawns'][j] = objects['respawns'][j + 1].copy()
                 objects['respawns'][-1] = {'x': 0, 'y': 0}
                 objects['respawn_count'] = max(0, objects['respawn_count'] - 1)
-                # Write to ROM cache immediately
-                save_object_data(objects, window.selected_map, window.difficulty)
                 mark_modified(window)
                 window.status_var.set(f"Deleted respawn point at ({col}, {row})")
                 render_map_view(window)
                 update_map_counters(window)
                 return
         
-        # Check for spawners (object data)
+        # Check for spawners
         for spawn in objects['spawns']:
             if spawn['x'] == x and spawn['y'] == y:
                 spawn['x'] = 0
                 spawn['y'] = 0
-                # Write to ROM cache immediately
-                save_object_data(objects, window.selected_map, window.difficulty)
                 mark_modified(window)
                 window.status_var.set(f"Deleted spawner at ({col}, {row})")
                 render_map_view(window)
@@ -2658,68 +2317,31 @@ def on_map_right_click(event, window):
 
 def on_escape_key(event, window):
     """Handle escape key"""
-    # Cancel teleporter placement
-    if window.teleporter_first_pos is not None:
-        # Restore the original tiles where we placed the first pillar
-        first_row, first_col = window.teleporter_first_pos
-        
-        left_col = first_col - 1
-        right_col = first_col + 1
-        
-        # Clear the pillar tiles back to empty path
-        for tile_col in [left_col, first_col, right_col]:
-            write_visual_tile_to_cache(window.selected_map, first_row, tile_col, empty_path_tile)
-            
-            logical_row = tile_col
-            logical_col = first_row + 1
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x00, 0x00])
-        
-        window.teleporter_first_pos = None
-        render_map_view(window)
-        window.status_var.set("Teleporter placement cancelled")
-    
-    # Cancel door drag
-    elif window.selected_door is not None:
+    # Cancel any ongoing operations
+    if window.selected_door is not None:
         window.selected_door = None
         window.door_drag_start = None
         window.door_ghost_pos = None
         render_map_view(window)
         window.status_var.set("Door movement cancelled")
-    
-    # Cancel player start drag
-    elif window.selected_player_start is not None:
-        window.selected_player_start = None
-        window.player_start_ghost_pos = None
+    elif window.teleporter_first_marker is not None:
+        window.teleporter_first_marker = None
         render_map_view(window)
-        window.status_var.set("Player start movement cancelled")
-
-def on_composite_click(composite_id, window):
-    """Handle clicking a composite object in the palette"""
-    window.selected_tile = None
-    window.selected_object_type = None
-    window.selected_composite = composite_id
-    
-    if composite_id.startswith('spawner_'):
-        window.selected_spawner_dir = composite_id.split('_')[1]
-    
-    update_tile_info(window)
-    window.status_var.set(f"Selected {composite_id} - click map to place")
+        window.status_var.set("Teleporter placement cancelled")
 
 def render_map_view(window):
-    """Render the map display - reads directly from ROM cache"""
+    """Render the map display"""
     try:
-        # Load map directly from cache
-        visual_map = load_visual_map_from_cache(window.selected_map)
-        
-        map_image = np.zeros((visual_map.shape[0] * 16, visual_map.shape[1] * 16, 4), 
+        raw_map_layout = visual_maps[window.selected_map]
+        map_image = np.zeros((raw_map_layout.shape[0] * 16, raw_map_layout.shape[1] * 16, 4), 
                             dtype=np.uint8)
         
         palette = palettes[window.selected_map]
         
         # Render each tile
-        for row in range(visual_map.shape[0]):
-            for col in range(visual_map.shape[1]):
-                tile_index = visual_map[row, col]
+        for row in range(raw_map_layout.shape[0]):
+            for col in range(raw_map_layout.shape[1]):
+                tile_index = raw_map_layout[row, col]
                 if tile_index < len(all_tiles):
                     tile = all_tiles[tile_index]
                     color_tile = apply_palette_to_tile(tile, palette)
@@ -2889,6 +2511,8 @@ def draw_objects_overlay(window):
 def render_tile_palette(window):
     """Render the tile palette"""
     try:
+        global palettes
+        
         tile_spacing = 5
         tile_display_size = int(16 * window.zoom_level)
         palette = palettes[window.selected_map]
@@ -2898,77 +2522,46 @@ def render_tile_palette(window):
         
         y_pos = tile_spacing
         
-        # COMPOSITE OBJECTS section
-        window.palette_canvas.create_text(tile_spacing, y_pos, text='COMPOSITE OBJECTS',
+        # WALLS section
+        window.palette_canvas.create_text(tile_spacing, y_pos, text='WALLS',
                                          anchor='nw', fill='white', font=('Arial', 9, 'bold'))
         y_pos += 20
         
         x_pos = tile_spacing
         max_y_in_row = y_pos
+        col_width = 1200
         
-        # Teleporter (display as horizontal: 100-38-101)
-        teleporter_display = np.array([[100, 38, 101]])
-        comp_img = np.zeros((16, 48, 4), dtype=np.uint8)
-        for c in range(3):
-            tile_idx = teleporter_display[0, c]
-            if tile_idx < len(all_tiles):
-                tile = all_tiles[tile_idx]
-                color_tile = apply_palette_to_tile(tile, palette)
-                comp_img[:, c*16:(c+1)*16] = color_tile
-        
-        scale = int(window.zoom_level)
-        comp_rgb = comp_img[:, :, :3]
-        comp_rgb_scaled = np.repeat(np.repeat(comp_rgb, scale, axis=0), scale, axis=1)
-        comp_pil = Image.fromarray(comp_rgb_scaled.astype('uint8')).convert('RGB')
-        comp_photo = ImageTk.PhotoImage(comp_pil)
-        
-        window.tile_images.append(('teleporter', comp_photo))
-        
-        img_id = window.palette_canvas.create_image(x_pos, y_pos, image=comp_photo, anchor='nw')
-        window.palette_canvas.tag_bind(img_id, '<Button-1>',
-                                      lambda e: on_composite_click('teleporter', window))
-        
-        label_y = y_pos + 16 * scale + 2
-        window.palette_canvas.create_text(x_pos + 24 * scale, label_y,
-                                        text="Teleporter", anchor='n', fill='lightgray',
-                                        font=('Arial', 7))
-        
-        max_y_in_row = max(max_y_in_row, label_y + 15)
-        x_pos += 48 * scale + tile_spacing * 2
-        
-        # Spawners (all 4 directions)
-        for direction in ['right', 'left', 'up', 'down']:
-            config = SPAWNER_CONFIGS[direction]
-            tiles = config['tiles']
-            h, w = tiles.shape
+        for tile_id in WALL_TILES + PATH_TILES:
+            if tile_id >= len(all_tiles):
+                continue
             
-            comp_img = np.zeros((h * 16, w * 16, 4), dtype=np.uint8)
-            for r in range(h):
-                for c in range(w):
-                    tile_idx = tiles[r, c]
-                    if tile_idx < len(all_tiles):
-                        tile = all_tiles[tile_idx]
-                        color_tile = apply_palette_to_tile(tile, palette)
-                        comp_img[r*16:(r+1)*16, c*16:(c+1)*16] = color_tile
+            tile = all_tiles[tile_id]
+            color_tile = apply_palette_to_tile(tile, palette)
+            scale = int(window.zoom_level)
+            color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+            tile_rgb = color_tile_large[:, :, :3]
+            tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+            tile_photo = ImageTk.PhotoImage(tile_img)
             
-            comp_rgb = comp_img[:, :, :3]
-            comp_rgb_scaled = np.repeat(np.repeat(comp_rgb, scale, axis=0), scale, axis=1)
-            comp_pil = Image.fromarray(comp_rgb_scaled.astype('uint8')).convert('RGB')
-            comp_photo = ImageTk.PhotoImage(comp_pil)
+            window.tile_images.append((tile_id, tile_photo))
             
-            window.tile_images.append((f'spawner_{direction}', comp_photo))
+            # Check if we need to wrap
+            if x_pos + tile_display_size > tile_spacing + col_width:
+                x_pos = tile_spacing
+                y_pos = max_y_in_row + 25
+                max_y_in_row = y_pos
             
-            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=comp_photo, anchor='nw')
+            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
             window.palette_canvas.tag_bind(img_id, '<Button-1>',
-                                          lambda e, d=direction: on_composite_click(f'spawner_{d}', window))
+                                          lambda e, tid=tile_id: on_tile_click(tid, window))
             
-            label_y = y_pos + h * 16 * scale + 2
-            window.palette_canvas.create_text(x_pos + w * 8 * scale, label_y,
-                                            text=f"Spawner\n{direction.title()}", anchor='n', 
-                                            fill='lightgray', font=('Arial', 7))
+            label_y = y_pos + tile_display_size + 2
+            window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                            text=f"0x{tile_id:02X}", anchor='n', fill='lightgray',
+                                            font=('Arial', 7))
             
-            max_y_in_row = max(max_y_in_row, label_y + 25)
-            x_pos += w * 16 * scale + tile_spacing * 2
+            max_y_in_row = max(max_y_in_row, label_y + 15)
+            x_pos += tile_display_size + tile_spacing
         
         y_pos = max_y_in_row + 10
         
