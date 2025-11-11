@@ -1483,18 +1483,6 @@ def launch_map_editor():
         
         # Clear reference when window is closed
         def on_close():
-            # Check for unsaved changes
-            if editor_window.modified:
-                result = messagebox.askyesnocancel(
-                    "Unsaved Changes",
-                    "You have unsaved changes. Save before closing?",
-                    parent=editor_window
-                )
-                if result is None:  # Cancel
-                    return
-                elif result:  # Yes - save
-                    save_map_editor_data(editor_window)
-            
             # Unregister callbacks
             if hasattr(editor_window, '_callbacks'):
                 for cb in editor_window._callbacks:
@@ -1929,17 +1917,9 @@ def build_left_panel(window):
     
     ttk.Separator(window.left_panel, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
     
-    # Save buttons at bottom
+    # Status bar at bottom
     status_frame = ttk.Frame(window.left_panel)
     status_frame.pack(side=tk.BOTTOM, fill=tk.X)
-    ttk.Label(status_frame, text="File Operations", 
-             font=('Arial', 10, 'bold')).pack(pady=5)
-    button_frame = ttk.Frame(status_frame)
-    button_frame.pack(side=tk.TOP, fill=tk.X, pady=2)
-    ttk.Button(button_frame, text="Save", 
-              command=lambda: save_map_editor_data(window)).pack(side=tk.LEFT, padx=2)
-    ttk.Button(button_frame, text="Save As",
-              command=lambda: save_map_editor_as(window)).pack(side=tk.RIGHT, padx=2)
     ttk.Label(status_frame, textvariable=window.status_var, 
              relief=tk.SUNKEN).pack(fill=tk.X, padx=5, pady=2)
 
@@ -2349,11 +2329,6 @@ def on_escape_key(event, window):
         render_map_view(window)
         window.status_var.set("Teleporter placement cancelled")
 
-def save_map_editor_as(window):
-    """Save map data to a new location"""
-    # TODO: Implement
-    pass
-
 def render_map_view(window):
     """Render the map display"""
     try:
@@ -2536,7 +2511,7 @@ def draw_objects_overlay(window):
 def render_tile_palette(window):
     """Render the tile palette"""
     try:
-        global palettes  # Access global palettes
+        global palettes
         
         tile_spacing = 5
         tile_display_size = int(16 * window.zoom_level)
@@ -2597,7 +2572,77 @@ def render_tile_palette(window):
         
         x_pos = tile_spacing
         max_y_in_row = y_pos
-
+        
+        # Show empty and filled pairs + keyhole
+        treasure_pairs = [(0x21, 0x6F), (0x22, 0x70), (0x4A, 0x62)]
+        for empty_id, filled_id in treasure_pairs:
+            # Empty box
+            tile = all_tiles[empty_id]
+            color_tile = apply_palette_to_tile(tile, palette)
+            scale = int(window.zoom_level)
+            color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+            tile_rgb = color_tile_large[:, :, :3]
+            tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+            tile_photo = ImageTk.PhotoImage(tile_img)
+            
+            window.tile_images.append((empty_id, tile_photo))
+            
+            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
+            window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                          lambda e, tid=empty_id: on_tile_click(tid, window))
+            
+            label_y = y_pos + tile_display_size + 2
+            window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                            text=f"0x{empty_id:02X}", anchor='n', fill='lightgray',
+                                            font=('Arial', 7))
+            
+            x_pos += tile_display_size + tile_spacing
+            
+            # Filled box
+            tile = all_tiles[filled_id]
+            color_tile = apply_palette_to_tile(tile, palette)
+            color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+            tile_rgb = color_tile_large[:, :, :3]
+            tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+            tile_photo = ImageTk.PhotoImage(tile_img)
+            
+            window.tile_images.append((filled_id, tile_photo))
+            
+            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
+            window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                          lambda e, tid=filled_id: on_tile_click(tid, window))
+            
+            window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                            text=f"0x{filled_id:02X}", anchor='n', fill='lightgray',
+                                            font=('Arial', 7))
+            
+            max_y_in_row = max(max_y_in_row, label_y + 15)
+            x_pos += tile_display_size + tile_spacing * 2
+        
+        # Add keyhole
+        tile = all_tiles[0x72]
+        color_tile = apply_palette_to_tile(tile, palette)
+        scale = int(window.zoom_level)
+        color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+        tile_rgb = color_tile_large[:, :, :3]
+        tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+        tile_photo = ImageTk.PhotoImage(tile_img)
+        
+        window.tile_images.append((0x72, tile_photo))
+        
+        img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
+        window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                      lambda e: on_tile_click(0x72, window))
+        
+        label_y = y_pos + tile_display_size + 2
+        window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                        text="0x72", anchor='n', fill='lightgray',
+                                        font=('Arial', 7))
+        
+        max_y_in_row = max(max_y_in_row, label_y + 15)
+        
+        y_pos = max_y_in_row + 10
+        
         # OBJECTS section
         window.palette_canvas.create_text(tile_spacing, y_pos, text='OBJECTS',
                                          anchor='nw', fill='white', font=('Arial', 9, 'bold'))
@@ -2606,8 +2651,7 @@ def render_tile_palette(window):
         x_pos = tile_spacing
         max_y_in_row = y_pos
         
-        # Object markers - we'll use special tiles for visualization
-        # Player start (tile 0x29), Respawn (tile 0x17)
+        # Object markers
         object_markers = [
             (0x29, 'player_start', 'Player Start'),
             (0x17, 'respawn', 'Respawn Point')
@@ -2722,11 +2766,6 @@ def update_tile_info(window):
             window.selected_tile_preview.config(image='')
     except Exception as e:
         logging.error(f"Error updating tile info: {e}")
-
-def save_map_editor_data(window):
-    """Save all map editor data"""
-    # TODO: Implement save functionality
-    pass
 
 #########################################
 # UI Graphics Editor Functions
