@@ -2024,13 +2024,325 @@ def save_map_editor_as(window):
 
 def render_map_view(window):
     """Render the map display"""
-    # TODO: Implement map rendering
-    pass
+    try:
+        raw_map_layout = visual_maps[window.selected_map]
+        map_image = np.zeros((raw_map_layout.shape[0] * 16, raw_map_layout.shape[1] * 16, 4), 
+                            dtype=np.uint8)
+        
+        palette = palettes[window.selected_map]
+        
+        # Render each tile
+        for row in range(raw_map_layout.shape[0]):
+            for col in range(raw_map_layout.shape[1]):
+                tile_index = raw_map_layout[row, col]
+                if tile_index < len(all_tiles):
+                    tile = all_tiles[tile_index]
+                    color_tile = apply_palette_to_tile(tile, palette)
+                    map_image[row * 16 : (row + 1) * 16, col * 16 : (col + 1) * 16, :] = color_tile
+        
+        # Convert to RGB
+        map_image_rgb = map_image[:, :, :3]
+        
+        # Apply zoom
+        if window.zoom_level != 1:
+            new_height = int(map_image_rgb.shape[0] * window.zoom_level)
+            new_width = int(map_image_rgb.shape[1] * window.zoom_level)
+            window.current_map_image = Image.fromarray(map_image_rgb.astype('uint8')).convert('RGB').resize(
+                (new_width, new_height), Image.NEAREST)
+        else:
+            window.current_map_image = Image.fromarray(map_image_rgb.astype('uint8')).convert('RGB')
+        
+        map_image_tk = ImageTk.PhotoImage(window.current_map_image)
+        
+        # Clear and redraw
+        window.map_canvas.delete('all')
+        window.map_canvas.create_image(0, 0, image=map_image_tk, anchor='nw')
+        window.map_canvas.image = map_image_tk
+        
+        # Draw object overlays if enabled
+        if window.show_objects.get():
+            draw_objects_overlay(window)
+        
+        # Draw grid if enabled
+        if window.show_grid.get():
+            for x in range(0, int(map_width * 16 * window.zoom_level), int(16 * window.zoom_level)):
+                window.map_canvas.create_line(x, 0, x, int(map_height * 16 * window.zoom_level), 
+                                             fill='#444444')
+            for y in range(0, int(map_height * 16 * window.zoom_level), int(16 * window.zoom_level)):
+                window.map_canvas.create_line(0, y, int(map_width * 16 * window.zoom_level), y, 
+                                             fill='#444444')
+        
+        # Draw door highlight if selected
+        if window.selected_door is not None:
+            row, col = window.selected_door
+            x = col * 16 * window.zoom_level
+            y = row * 16 * window.zoom_level
+            size = 3 * 16 * window.zoom_level
+            window.map_canvas.create_rectangle(x-2, y-2, x+size+2, y+size+2,
+                                             outline='cyan', width=3, tags='door_highlight')
+        
+        # Draw door ghost if dragging
+        if window.door_ghost_pos is not None:
+            row, col = window.door_ghost_pos
+            if row + 3 <= map_height and col + 3 <= map_width:
+                x = col * 16 * window.zoom_level
+                y = row * 16 * window.zoom_level
+                size = 3 * 16 * window.zoom_level
+                window.map_canvas.create_rectangle(x, y, x+size, y+size,
+                                                 outline='yellow', width=2, dash=(4, 4),
+                                                 tags='door_ghost')
+        
+        # Update scroll region
+        window.map_canvas.configure(scrollregion=(0, 0, 
+                                                 int(map_width * 16 * window.zoom_level), 
+                                                 int(map_height * 16 * window.zoom_level)))
+        
+    except Exception as e:
+        logging.error(f"Error rendering map: {e}")
+
+def draw_objects_overlay(window):
+    """Draw object overlays on the map"""
+    global palettes  # Access global palettes
+    
+    objects = window.object_data[window.difficulty][window.selected_map]
+    
+    # Clear existing overlay images
+    window._overlay_images.clear()
+    
+    # Player start
+    ps = objects['player_start']
+    if ps['y'] != 0:
+        col = ps['y'] // 0x08
+        row_from_bottom = ps['x'] // 0x08
+        row = (map_height - 1) - row_from_bottom
+        x = col * 16 * window.zoom_level
+        y = row * 16 * window.zoom_level
+        size = 16 * window.zoom_level
+        
+        window.map_canvas.create_rectangle(x, y, x+size, y+size,
+                                         outline='lime', width=3, tags='object_overlay')
+    
+    # Respawns
+    for i in range(objects['respawn_count']):
+        respawn = objects['respawns'][i]
+        if respawn['y'] != 0:
+            col = respawn['y'] // 0x08
+            row_from_bottom = respawn['x'] // 0x08
+            row = (map_height - 1) - row_from_bottom
+            x = col * 16 * window.zoom_level
+            y = row * 16 * window.zoom_level
+            size = 16 * window.zoom_level
+            
+            window.map_canvas.create_oval(x, y, x+size, y+size,
+                                         outline='yellow', width=2, tags='object_overlay')
+    
+    # Items
+    for item in objects['items']:
+        if item['active']:
+            col = item['y'] // 0x08
+            row_from_bottom = item['x'] // 0x08
+            row = (map_height - 1) - row_from_bottom
+            x = col * 16 * window.zoom_level
+            y = row * 16 * window.zoom_level
+            size = 16 * window.zoom_level
+            
+            window.map_canvas.create_rectangle(x, y, x+size, y+size,
+                                             outline='green', width=3, tags='object_overlay')
+            
+            # Draw filled box overlay if applicable
+            if item['tile_id'] in FILLED_TO_EMPTY:
+                tile_idx = item['tile_id']
+                if tile_idx < len(all_tiles):
+                    tile = all_tiles[tile_idx]
+                    palette = palettes[window.selected_map]
+                    color_tile = apply_palette_to_tile(tile, palette)
+                    
+                    scale = int(window.zoom_level)
+                    color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+                    tile_rgb = color_tile_large[:, :, :3]
+                    
+                    tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+                    tile_img.putalpha(180)
+                    tile_photo = ImageTk.PhotoImage(tile_img)
+                    
+                    window._overlay_images.append(tile_photo)
+                    
+                    window.map_canvas.create_image(x, y, image=tile_photo, anchor='nw',
+                                                  tags='object_overlay')
+    
+    # Teleporters
+    for tp in objects['teleports']:
+        if tp['y'] != 0:
+            col = tp['y'] // 0x08
+            row_from_bottom = tp['top_row'] // 0x08
+            row_top = (map_height - 1) - row_from_bottom
+            row_from_bottom = tp['bottom_row'] // 0x08
+            row_bottom = (map_height - 1) - row_from_bottom
+            
+            x = col * 16 * window.zoom_level
+            y_top = row_top * 16 * window.zoom_level
+            y_bottom = row_bottom * 16 * window.zoom_level
+            
+            window.map_canvas.create_line(x + 8*window.zoom_level, y_top + 8*window.zoom_level,
+                                         x + 8*window.zoom_level, y_bottom + 8*window.zoom_level,
+                                         fill='magenta', width=2, dash=(4, 4), tags='object_overlay')
+    
+    # Spawners
+    for spawn in objects['spawns']:
+        if spawn['y'] != 0:
+            col = spawn['y'] // 0x08
+            row_from_bottom = spawn['x'] // 0x08
+            row = (map_height - 1) - row_from_bottom
+            
+            x = col * 16 * window.zoom_level
+            y = row * 16 * window.zoom_level
+            size = 16 * window.zoom_level
+            
+            window.map_canvas.create_oval(x, y, x+size, y+size,
+                                         outline='red', width=2, tags='object_overlay')
 
 def render_tile_palette(window):
     """Render the tile palette"""
-    # TODO: Implement palette rendering
-    pass
+    try:
+        global palettes  # Access global palettes
+        
+        tile_spacing = 5
+        tile_display_size = int(16 * window.zoom_level)
+        palette = palettes[window.selected_map]
+        
+        window.tile_images.clear()
+        window.palette_canvas.delete('all')
+        
+        y_pos = tile_spacing
+        
+        # WALLS section
+        window.palette_canvas.create_text(tile_spacing, y_pos, text='WALLS',
+                                         anchor='nw', fill='white', font=('Arial', 9, 'bold'))
+        y_pos += 20
+        
+        x_pos = tile_spacing
+        max_y_in_row = y_pos
+        col_width = 1200
+        
+        for tile_id in WALL_TILES + PATH_TILES:
+            if tile_id >= len(all_tiles):
+                continue
+            
+            tile = all_tiles[tile_id]
+            color_tile = apply_palette_to_tile(tile, palette)
+            scale = int(window.zoom_level)
+            color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+            tile_rgb = color_tile_large[:, :, :3]
+            tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+            tile_photo = ImageTk.PhotoImage(tile_img)
+            
+            window.tile_images.append((tile_id, tile_photo))
+            
+            # Check if we need to wrap
+            if x_pos + tile_display_size > tile_spacing + col_width:
+                x_pos = tile_spacing
+                y_pos = max_y_in_row + 25
+                max_y_in_row = y_pos
+            
+            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
+            window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                          lambda e, tid=tile_id: on_tile_click(tid, window))
+            
+            label_y = y_pos + tile_display_size + 2
+            window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                            text=f"0x{tile_id:02X}", anchor='n', fill='lightgray',
+                                            font=('Arial', 7))
+            
+            max_y_in_row = max(max_y_in_row, label_y + 15)
+            x_pos += tile_display_size + tile_spacing
+        
+        y_pos = max_y_in_row + 10
+        
+        # TREASURES section
+        window.palette_canvas.create_text(tile_spacing, y_pos, text='TREASURES',
+                                         anchor='nw', fill='white', font=('Arial', 9, 'bold'))
+        y_pos += 20
+        
+        x_pos = tile_spacing
+        max_y_in_row = y_pos
+        
+        # Show empty and filled pairs + keyhole
+        treasure_pairs = [(0x21, 0x6F), (0x22, 0x70), (0x4A, 0x62)]
+        for empty_id, filled_id in treasure_pairs:
+            # Empty box
+            tile = all_tiles[empty_id]
+            color_tile = apply_palette_to_tile(tile, palette)
+            scale = int(window.zoom_level)
+            color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+            tile_rgb = color_tile_large[:, :, :3]
+            tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+            tile_photo = ImageTk.PhotoImage(tile_img)
+            
+            window.tile_images.append((empty_id, tile_photo))
+            
+            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
+            window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                          lambda e, tid=empty_id: on_tile_click(tid, window))
+            
+            label_y = y_pos + tile_display_size + 2
+            window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                            text=f"0x{empty_id:02X}", anchor='n', fill='lightgray',
+                                            font=('Arial', 7))
+            
+            x_pos += tile_display_size + tile_spacing
+            
+            # Filled box
+            tile = all_tiles[filled_id]
+            color_tile = apply_palette_to_tile(tile, palette)
+            color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+            tile_rgb = color_tile_large[:, :, :3]
+            tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+            tile_photo = ImageTk.PhotoImage(tile_img)
+            
+            window.tile_images.append((filled_id, tile_photo))
+            
+            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
+            window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                          lambda e, tid=filled_id: on_tile_click(tid, window))
+            
+            window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                            text=f"0x{filled_id:02X}", anchor='n', fill='lightgray',
+                                            font=('Arial', 7))
+            
+            max_y_in_row = max(max_y_in_row, label_y + 15)
+            x_pos += tile_display_size + tile_spacing * 2
+        
+        # Add keyhole
+        tile = all_tiles[0x72]
+        color_tile = apply_palette_to_tile(tile, palette)
+        scale = int(window.zoom_level)
+        color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+        tile_rgb = color_tile_large[:, :, :3]
+        tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+        tile_photo = ImageTk.PhotoImage(tile_img)
+        
+        window.tile_images.append((0x72, tile_photo))
+        
+        img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
+        window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                      lambda e: on_tile_click(0x72, window))
+        
+        label_y = y_pos + tile_display_size + 2
+        window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                        text="0x72", anchor='n', fill='lightgray',
+                                        font=('Arial', 7))
+        
+        window.palette_canvas.configure(scrollregion=window.palette_canvas.bbox("all"))
+        
+    except Exception as e:
+        logging.error(f"Error rendering palette: {e}")
+
+def on_tile_click(tile_id, window):
+    """Handle tile palette click"""
+    window.selected_tile = tile_id
+    window.selected_object_type = None
+    update_tile_info(window)
+    window.status_var.set(f"Selected tile 0x{tile_id:02X}")
 
 def update_map_counters(window):
     """Update object counters"""
