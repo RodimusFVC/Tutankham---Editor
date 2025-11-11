@@ -38,7 +38,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "V18"		# Editor Version Number
+EDITOR_VERSION = "v0.19"	# Editor Version Number
 open_windows = {			# Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
