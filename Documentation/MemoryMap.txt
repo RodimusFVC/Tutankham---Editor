@@ -31,7 +31,39 @@
 | m1.1h  | 0xA4D1-0xA4D1   | 1B    | 5TH Stage                       | 01 (Level 2)               |
 | m1.1h  | 0xA4D2-0xA4D2   | 1B    | 6TH Stage                       | 01 (Level 2)               |
 | m1.1h  | 0xA4D3-0xA4D3   | 1B    | 7TH Stage                       | 01 (Level 2)               |
-| m1.1h  | 0xA4D4-0xA553   | 128B  | Unknown (Code/Data)             | Unknown                    |
+| m1.1h  | 0xA4D4-0xA4D5   | 2B    | Coin Mech A - 1 Coin/1 Credit   | 01 01 (DS 1 - xxxx0000)    |
+| m1.1h  | 0xA4D6-0xA4D7   | 2B    | Coin Mech A - 1 Coin/2 Credits  | 01 02 (DS 1 - xxxx0001)    |
+| m1.1h  | 0xA4D8-0xA4D9   | 2B    | Coin Mech A - 1 Coin/3 Credits  | 01 03 (DS 1 - xxxx0010)    |
+| m1.1h  | 0xA4DA-0xA4DB   | 2B    | Coin Mech A - 1 Coin/4 Credits  | 01 04 (DS 1 - xxxx0011)    |
+| m1.1h  | 0xA4DC-0xA4DD   | 2B    | Coin Mech A - 1 Coin/5 Credits  | 01 05 (DS 1 - xxxx0100)    |
+| m1.1h  | 0xA4DE-0xA4DF   | 2B    | Coin Mech A - 1 Coin/6 Credits  | 01 06 (DS 1 - xxxx0101)    |
+| m1.1h  | 0xA4E0-0xA4E1   | 2B    | Coin Mech A - 1 Coin/7 Credits  | 01 07 (DS 1 - xxxx0110)    |
+| m1.1h  | 0xA4E2-0xA4E3   | 2B    | Coin Mech A - 2 Coins/1 Credit  | 02 01 (DS 1 - xxxx0111)    |
+| m1.1h  | 0xA4E4-0xA4E5   | 2B    | Coin Mech A - 2 Coins/3 Credits | 02 03 (DS 1 - xxxx1000)    |
+| m1.1h  | 0xA4E6-0xA4E7   | 2B    | Coin Mech A - 2 Coins/5 Credits | 02 05 (DS 1 - xxxx1001)    |
+| m1.1h  | 0xA4E8-0xA4E9   | 2B    | Coin Mech A - 3 Coins/1 Credit  | 03 01 (DS 1 - xxxx1010)    |
+| m1.1h  | 0xA4EA-0xA4EB   | 2B    | Coin Mech A - 3 Coins/2 Credits | 03 02 (DS 1 - xxxx1011)    |
+| m1.1h  | 0xA4EC-0xA4ED   | 2B    | Coin Mech A - 3 Coins/4 Credits | 03 04 (DS 1 - xxxx1100)    |
+| m1.1h  | 0xA4EE-0xA4EF   | 2B    | Coin Mech A - 4 Coins/1 Credit  | 04 01 (DS 1 - xxxx1101)    |
+| m1.1h  | 0xA4F0-0xA4F1   | 2B    | Coin Mech A - 4 Coins/3 Credits | 04 03 (DS 1 - xxxx1110)    |
+| m1.1h  | 0xA4F2-0xA4F3   | 2B    | Coin Mech A - Free Play         | 01 00 (DS 1 - xxxx1111)    |
+| m1.1h  | 0xA4F4-0xA4F5   | 2B    | Coin Mech B - 1 Coin/1 Credit   | 01 01 (DS 1 - 0000xxxx)    |
+| m1.1h  | 0xA4F6-0xA4F7   | 2B    | Coin Mech B - 1 Coin/2 Credits  | 01 02 (DS 1 - 0001xxxx)    |
+| m1.1h  | 0xA4F8-0xA4F9   | 2B    | Coin Mech B - 1 Coin/3 Credits  | 01 03 (DS 1 - 0010xxxx)    |
+| m1.1h  | 0xA4FA-0xA4FB   | 2B    | Coin Mech B - 1 Coin/4 Credits  | 01 04 (DS 1 - 0011xxxx)    |
+| m1.1h  | 0xA4FC-0xA4FD   | 2B    | Coin Mech B - 1 Coin/5 Credits  | 01 05 (DS 1 - 0100xxxx)    |
+| m1.1h  | 0xA4FE-0xA4FF   | 2B    | Coin Mech B - 1 Coin/6 Credits  | 01 06 (DS 1 - 0101xxxx)    |
+| m1.1h  | 0xA500-0xA501   | 2B    | Coin Mech B - 1 Coin/7 Credits  | 01 07 (DS 1 - 0110xxxx)    |
+| m1.1h  | 0xA502-0xA503   | 2B    | Coin Mech B - 2 Coins/1 Credit  | 02 01 (DS 1 - 0111xxxx)    |
+| m1.1h  | 0xA504-0xA505   | 2B    | Coin Mech B - 2 Coins/3 Credits | 02 03 (DS 1 - 1000xxxx)    |
+| m1.1h  | 0xA506-0xA507   | 2B    | Coin Mech B - 2 Coins/5 Credits | 02 05 (DS 1 - 1001xxxx)    |
+| m1.1h  | 0xA508-0xA509   | 2B    | Coin Mech B - 3 Coins/1 Credit  | 03 01 (DS 1 - 1010xxxx)    |
+| m1.1h  | 0xA50A-0xA50B   | 2B    | Coin Mech B - 3 Coins/2 Credits | 03 02 (DS 1 - 1011xxxx)    |
+| m1.1h  | 0xA50C-0xA50D   | 2B    | Coin Mech B - 3 Coins/4 Credits | 03 04 (DS 1 - 1100xxxx)    |
+| m1.1h  | 0xA50E-0xA50F   | 2B    | Coin Mech B - 4 Coins/1 Credit  | 04 01 (DS 1 - 1101xxxx)    |
+| m1.1h  | 0xA510-0xA511   | 2B    | Coin Mech B - 4 Coins/3 Credits | 04 03 (DS 1 - 1110xxxx)    |
+| m1.1h  | 0xA512-0xA513   | 2B    | Coin Mech B - Invalid?          | 01 00 (DS 1 - 1111xxxx)    |
+| m1.1h  | 0xA514-0xA553   | 64B   | Unknown (Code/Data)             | Unknown                    |
 | m1.1h  | 0xA554-0xA55D   | 10B   | Unknown Block Range Start       | Unknown purpose            |
 | m1.1h  | 0xA55E-0xA57D   | 32B   | Unknown Range 1                 | Unknown purpose            |
 | m1.1h  | 0xA57E-0xA59D   | 32B   | Unknown Range 2                 | Unknown purpose            |
