@@ -1443,7 +1443,7 @@ def launch_map_editor():
         # Calculate window size based on map at 3x zoom
         map_display_width = map_width * 16 * 3  # 3072
         map_display_height = map_height * 16 * 3  # 576
-        left_panel_width = 255
+        left_panel_width = 300
         palette_height = 250
         
         window_width = left_panel_width + map_display_width + 40
@@ -1737,7 +1737,7 @@ def build_map_editor_ui(window):
     main_frame.pack(fill=tk.BOTH, expand=True)
     
     # Left panel (controls)
-    window.left_panel = ttk.Frame(main_frame, width=255)
+    window.left_panel = ttk.Frame(main_frame, width=300)
     window.left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
     window.left_panel.pack_propagate(False)
     
@@ -1959,63 +1959,395 @@ def update_selection_highlight(window):
 
 def on_map_select(map_idx, window):
     """Handle map selection"""
-    # TODO: Implement
-    pass
+    window.selected_map = map_idx
+    update_selection_highlight(window)
+    
+    # Refresh composite positions for the new map
+    window.door_positions[map_idx] = find_door(map_idx)
+    window.spawner_positions[map_idx] = find_spawners(map_idx)
+    window.teleporter_positions[map_idx] = find_teleporters(map_idx)
+    
+    window.tile_images.clear()
+    window.palette_canvas.delete('all')
+    render_tile_palette(window)
+    render_map_view(window)
+    update_map_config_display(window)
+    update_map_counters(window)
 
 def select_map_and_difficulty(map_idx, diff, window):
     """Handle map and difficulty selection"""
-    # TODO: Implement
-    pass
+    window.selected_map = map_idx
+    window.difficulty = diff
+    
+    update_selection_highlight(window)
+    
+    # Refresh everything
+    window.door_positions[map_idx] = find_door(map_idx)
+    window.spawner_positions[map_idx] = find_spawners(map_idx)
+    window.teleporter_positions[map_idx] = find_teleporters(map_idx)
+    
+    window.tile_images.clear()
+    window.palette_canvas.delete('all')
+    render_tile_palette(window)
+    render_map_view(window)
+    update_map_config_display(window)
+    update_map_counters(window)
 
 def set_time_limit(window):
     """Set time limit for current map/difficulty"""
-    # TODO: Implement
-    pass
+    try:
+        new_limit = int(window.time_limit_var.get())
+        if new_limit < 0 or new_limit > 255:
+            messagebox.showwarning("Invalid Value", "Time limit must be 0-255 seconds")
+            return
+        
+        window.map_config[window.difficulty][window.selected_map]['time_limit'] = new_limit
+        mark_modified(window)
+        window.status_var.set(f"Time limit set to {new_limit} seconds")
+    except ValueError:
+        messagebox.showwarning("Invalid Value", "Please enter a valid number")
 
 def set_spawn_rate(window):
     """Set spawn rate for current map/difficulty"""
-    # TODO: Implement
-    pass
+    try:
+        new_rate = int(window.spawn_rate_var.get())
+        if new_rate < 1 or new_rate > 14:
+            messagebox.showwarning("Invalid Value", 
+                "Spawn rate must be 1-14 (game uses 5-8, higher values may crash)")
+            return
+        
+        window.map_config[window.difficulty][window.selected_map]['spawn_rate'] = new_rate
+        mark_modified(window)
+        window.status_var.set(f"Spawn rate set to {new_rate}")
+    except ValueError:
+        messagebox.showwarning("Invalid Value", "Please enter a valid number")
+
+def mark_modified(window):
+    """Mark the editor as having unsaved changes"""
+    if not window.modified:
+        window.modified = True
+        current_title = window.winfo_toplevel().title()
+        if not current_title.endswith("*"):
+            window.winfo_toplevel().title(current_title + " *")
 
 def zoom_in(window):
     """Zoom in on map"""
-    # TODO: Implement
-    pass
+    if window.zoom_level < 8:
+        window.zoom_level += 1
+        window.zoom_label.config(text=f"{int(window.zoom_level)}x")
+        render_map_view(window)
+        window.palette_canvas.delete('all')
+        render_tile_palette(window)
 
 def zoom_out(window):
     """Zoom out on map"""
-    # TODO: Implement
-    pass
+    if window.zoom_level > 1:
+        window.zoom_level -= 1
+        window.zoom_label.config(text=f"{int(window.zoom_level)}x")
+        render_map_view(window)
+        window.palette_canvas.delete('all')
+        render_tile_palette(window)
 
 def on_map_click(event, window):
     """Handle map canvas click"""
-    # TODO: Implement
-    pass
+    try:
+        canvas_x = window.map_canvas.canvasx(event.x)
+        canvas_y = window.map_canvas.canvasy(event.y)
+        
+        col = int(canvas_x // (16 * window.zoom_level))
+        row = int(canvas_y // (16 * window.zoom_level))
+        
+        if not (0 <= row < map_height and 0 <= col < map_width):
+            return
+        
+        # Check if we can edit (only difficulty 1)
+        if window.difficulty > 0 and window.selected_tile is not None:
+            messagebox.showwarning("Edit Locked", 
+                "Visual/logical map editing is only allowed in Difficulty 1.\n"
+                "Higher difficulties only allow enabling/disabling objects.")
+            return
+        
+        visual_map = visual_maps[window.selected_map]
+        
+        # Check if clicking on door
+        if is_door_tile(row, col, window):
+            door_pos = window.door_positions[window.selected_map]
+            window.selected_door = door_pos
+            window.door_drag_start = (row, col)
+            window.status_var.set("Door selected - drag to move")
+            render_map_view(window)
+            return
+        
+        # Handle object marker placement
+        if window.selected_object_type:
+            place_object_marker(row, col, window)
+            return
+        
+        # Handle tile placement
+        if window.selected_tile is not None:
+            place_tile(row, col, window)
+        
+    except Exception as e:
+        logging.error(f"Error in map click: {e}")
+
+def is_door_tile(row, col, window):
+    """Check if a position is part of the door"""
+    door_pos = window.door_positions.get(window.selected_map)
+    if door_pos is None:
+        return False
+    
+    door_row, door_col = door_pos
+    return (door_row <= row < door_row + 3 and 
+            door_col <= col < door_col + 3)
+
+def clear_door(row, col, window):
+    """Clear door from position"""
+    visual_map = visual_maps[window.selected_map]
+    logical_map = logical_maps[window.selected_map]
+    
+    for dr in range(3):
+        for dc in range(3):
+            visual_map[row + dr, col + dc] = empty_path_tile
+            logical_row = col + dc
+            logical_col = row + dr + 1
+            logical_map[logical_row, logical_col] = [0x00, 0x00]
+
+def place_door_at(row, col, window):
+    """Place door at position"""
+    if row + 3 > map_height or col + 3 > map_width:
+        return False
+    
+    visual_map = visual_maps[window.selected_map]
+    logical_map = logical_maps[window.selected_map]
+    
+    for dr in range(3):
+        for dc in range(3):
+            visual_map[row + dr, col + dc] = DOOR_TILES[dr, dc]
+            logical_row = col + dc
+            logical_col = row + dr + 1
+            logical_map[logical_row, logical_col] = DOOR_LOGICAL[dr, dc]
+    
+    return True
+
+def place_object_marker(row, col, window):
+    """Place an object marker on the map"""
+    try:
+        # Convert to game coordinates
+        row_from_bottom = (map_height - 1) - row
+        x = row_from_bottom * 0x08
+        y = col * 0x08
+        
+        objects = window.object_data[window.difficulty][window.selected_map]
+        
+        if window.selected_object_type == 'respawn':
+            # Check if we have room
+            if objects['respawn_count'] >= NUM_RESPAWNS:
+                messagebox.showwarning("Limit Reached", 
+                    f"Maximum {NUM_RESPAWNS} respawn points allowed")
+                return
+            
+            # Add respawn
+            for respawn in objects['respawns']:
+                if respawn['y'] == 0:  # Empty slot
+                    respawn['x'] = x
+                    respawn['y'] = y
+                    objects['respawn_count'] += 1
+                    break
+            
+            mark_modified(window)
+            window.status_var.set(f"Placed respawn at ({col}, {row})")
+            render_map_view(window)
+            update_map_counters(window)
+        
+        elif window.selected_object_type == 'player_start':
+            # Can't place player start, only move it
+            messagebox.showinfo("Player Start", 
+                "Player start cannot be placed - it already exists.\n"
+                "Click on the existing player start marker to drag it to a new location.")
+        
+    except Exception as e:
+        logging.error(f"Error placing object marker: {e}")
+
+def place_tile(row, col, window):
+    """Place a tile on the map"""
+    try:
+        # Check if this is a door tile
+        if is_door_tile(row, col, window):
+            messagebox.showwarning("Protected", 
+                "This tile is part of the door. Use drag-and-drop to move the door.")
+            return
+        
+        # Place the tile
+        visual_maps[window.selected_map][row, col] = window.selected_tile
+        
+        # Update logical map
+        logical_map = logical_maps[window.selected_map]
+        logical_row = col
+        logical_col = row + 1
+        
+        if window.selected_tile == empty_path_tile:
+            logical_map[logical_row, logical_col] = [0x00, 0x00]
+        else:
+            # Check existing logical bytes
+            existing_pair = logical_map[logical_row, logical_col]
+            if np.array_equal(existing_pair, [0x00, 0x00]) or np.array_equal(existing_pair, [0x55, 0x55]):
+                logical_map[logical_row, logical_col] = [0x55, 0x55]
+        
+        mark_modified(window)
+        render_map_view(window)
+        window.status_var.set(f"Placed tile 0x{window.selected_tile:02X} at ({col}, {row})")
+        
+    except Exception as e:
+        logging.error(f"Error placing tile: {e}")
 
 def on_map_hover(event, window):
     """Handle map canvas hover"""
-    # TODO: Implement
-    pass
+    try:
+        canvas_x = window.map_canvas.canvasx(event.x)
+        canvas_y = window.map_canvas.canvasy(event.y)
+        
+        col = int(canvas_x // (16 * window.zoom_level))
+        row = int(canvas_y // (16 * window.zoom_level))
+        
+        if 0 <= row < map_height and 0 <= col < map_width:
+            x_coord = row * 0x08
+            y_coord = col * 0x08
+            window.coord_var.set(f"XX=0x{x_coord:02X}  YYYY=0x{y_coord:04X}  (R{row}, C{col})")
+        else:
+            window.coord_var.set("")
+    except Exception as e:
+        logging.error(f"Error in hover: {e}")
 
 def on_map_drag(event, window):
     """Handle map canvas drag"""
-    # TODO: Implement
-    pass
+    try:
+        if window.selected_door is None:
+            return
+        
+        canvas_x = window.map_canvas.canvasx(event.x)
+        canvas_y = window.map_canvas.canvasy(event.y)
+        
+        col = int(canvas_x // (16 * window.zoom_level))
+        row = int(canvas_y // (16 * window.zoom_level))
+        
+        if 0 <= row < map_height and 0 <= col < map_width:
+            window.door_ghost_pos = (row, col)
+            render_map_view(window)
+    except Exception as e:
+        logging.error(f"Error in map drag: {e}")
 
 def on_map_release(event, window):
     """Handle map canvas button release"""
-    # TODO: Implement
-    pass
+    try:
+        canvas_x = window.map_canvas.canvasx(event.x)
+        canvas_y = window.map_canvas.canvasy(event.y)
+        
+        col = int(canvas_x // (16 * window.zoom_level))
+        row = int(canvas_y // (16 * window.zoom_level))
+        
+        # Handle door release
+        if window.selected_door is not None:
+            if 0 <= row < map_height and 0 <= col < map_width:
+                if row + 3 <= map_height and col + 3 <= map_width:
+                    # Clear old door position
+                    clear_door(window.selected_door[0], window.selected_door[1], window)
+                    
+                    # Place at new position
+                    if place_door_at(row, col, window):
+                        window.door_positions[window.selected_map] = (row, col)
+                        mark_modified(window)
+                        window.status_var.set(f"Door moved to ({col}, {row})")
+                    else:
+                        # Failed - restore old position
+                        place_door_at(window.selected_door[0], window.selected_door[1], window)
+                        window.status_var.set("Invalid door placement")
+                else:
+                    window.status_var.set("Door doesn't fit at that location")
+            
+            window.selected_door = None
+            window.door_drag_start = None
+            window.door_ghost_pos = None
+            render_map_view(window)
+            return
+            
+    except Exception as e:
+        logging.error(f"Error in map release: {e}")
 
 def on_map_right_click(event, window):
     """Handle map canvas right click"""
-    # TODO: Implement
-    pass
+    try:
+        canvas_x = window.map_canvas.canvasx(event.x)
+        canvas_y = window.map_canvas.canvasy(event.y)
+        
+        col = int(canvas_x // (16 * window.zoom_level))
+        row = int(canvas_y // (16 * window.zoom_level))
+        
+        if not (0 <= row < map_height and 0 <= col < map_width):
+            return
+        
+        # Convert to game coordinates (with proper flip)
+        row_from_bottom = (map_height - 1) - row  # Flip row
+        x = row_from_bottom * 0x08
+        y = col * 0x08
+        
+        objects = window.object_data[window.difficulty][window.selected_map]
+        
+        # Check for items at this position
+        for item in objects['items']:
+            if item['active'] and item['x'] == x and item['y'] == y:
+                item['active'] = False
+                mark_modified(window)
+                window.status_var.set(f"Deleted item at ({col}, {row})")
+                render_map_view(window)
+                update_map_counters(window)
+                return
+        
+        # Check for respawns
+        for i, respawn in enumerate(objects['respawns']):
+            if respawn['x'] == x and respawn['y'] == y:
+                # Shift remaining respawns down
+                for j in range(i, NUM_RESPAWNS - 1):
+                    objects['respawns'][j] = objects['respawns'][j + 1].copy()
+                objects['respawns'][-1] = {'x': 0, 'y': 0}
+                objects['respawn_count'] = max(0, objects['respawn_count'] - 1)
+                mark_modified(window)
+                window.status_var.set(f"Deleted respawn point at ({col}, {row})")
+                render_map_view(window)
+                update_map_counters(window)
+                return
+        
+        # Check for spawners
+        for spawn in objects['spawns']:
+            if spawn['x'] == x and spawn['y'] == y:
+                spawn['x'] = 0
+                spawn['y'] = 0
+                mark_modified(window)
+                window.status_var.set(f"Deleted spawner at ({col}, {row})")
+                render_map_view(window)
+                update_map_counters(window)
+                return
+        
+        # Can't delete player start
+        if objects['player_start']['x'] == x and objects['player_start']['y'] == y:
+            messagebox.showwarning("Cannot Delete", "Cannot delete player start position")
+            return
+            
+    except Exception as e:
+        logging.error(f"Error in right click: {e}")
 
 def on_escape_key(event, window):
     """Handle escape key"""
-    # TODO: Implement
-    pass
+    # Cancel any ongoing operations
+    if window.selected_door is not None:
+        window.selected_door = None
+        window.door_drag_start = None
+        window.door_ghost_pos = None
+        render_map_view(window)
+        window.status_var.set("Door movement cancelled")
+    elif window.teleporter_first_marker is not None:
+        window.teleporter_first_marker = None
+        render_map_view(window)
+        window.status_var.set("Teleporter placement cancelled")
 
 def save_map_editor_as(window):
     """Save map data to a new location"""
@@ -2265,12 +2597,24 @@ def render_tile_palette(window):
         
         x_pos = tile_spacing
         max_y_in_row = y_pos
+
+        # OBJECTS section
+        window.palette_canvas.create_text(tile_spacing, y_pos, text='OBJECTS',
+                                         anchor='nw', fill='white', font=('Arial', 9, 'bold'))
+        y_pos += 20
         
-        # Show empty and filled pairs + keyhole
-        treasure_pairs = [(0x21, 0x6F), (0x22, 0x70), (0x4A, 0x62)]
-        for empty_id, filled_id in treasure_pairs:
-            # Empty box
-            tile = all_tiles[empty_id]
+        x_pos = tile_spacing
+        max_y_in_row = y_pos
+        
+        # Object markers - we'll use special tiles for visualization
+        # Player start (tile 0x29), Respawn (tile 0x17)
+        object_markers = [
+            (0x29, 'player_start', 'Player Start'),
+            (0x17, 'respawn', 'Respawn Point')
+        ]
+        
+        for tile_id, obj_type, label_text in object_markers:
+            tile = all_tiles[tile_id]
             color_tile = apply_palette_to_tile(tile, palette)
             scale = int(window.zoom_level)
             color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
@@ -2278,64 +2622,31 @@ def render_tile_palette(window):
             tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
             tile_photo = ImageTk.PhotoImage(tile_img)
             
-            window.tile_images.append((empty_id, tile_photo))
+            window.tile_images.append((tile_id, tile_photo))
             
             img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
             window.palette_canvas.tag_bind(img_id, '<Button-1>',
-                                          lambda e, tid=empty_id: on_tile_click(tid, window))
+                                          lambda e, otype=obj_type: on_object_marker_click(otype, window))
             
             label_y = y_pos + tile_display_size + 2
             window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
-                                            text=f"0x{empty_id:02X}", anchor='n', fill='lightgray',
-                                            font=('Arial', 7))
-            
-            x_pos += tile_display_size + tile_spacing
-            
-            # Filled box
-            tile = all_tiles[filled_id]
-            color_tile = apply_palette_to_tile(tile, palette)
-            color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
-            tile_rgb = color_tile_large[:, :, :3]
-            tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
-            tile_photo = ImageTk.PhotoImage(tile_img)
-            
-            window.tile_images.append((filled_id, tile_photo))
-            
-            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
-            window.palette_canvas.tag_bind(img_id, '<Button-1>',
-                                          lambda e, tid=filled_id: on_tile_click(tid, window))
-            
-            window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
-                                            text=f"0x{filled_id:02X}", anchor='n', fill='lightgray',
+                                            text=label_text, anchor='n', fill='lightgray',
                                             font=('Arial', 7))
             
             max_y_in_row = max(max_y_in_row, label_y + 15)
             x_pos += tile_display_size + tile_spacing * 2
         
-        # Add keyhole
-        tile = all_tiles[0x72]
-        color_tile = apply_palette_to_tile(tile, palette)
-        scale = int(window.zoom_level)
-        color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
-        tile_rgb = color_tile_large[:, :, :3]
-        tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
-        tile_photo = ImageTk.PhotoImage(tile_img)
-        
-        window.tile_images.append((0x72, tile_photo))
-        
-        img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
-        window.palette_canvas.tag_bind(img_id, '<Button-1>',
-                                      lambda e: on_tile_click(0x72, window))
-        
-        label_y = y_pos + tile_display_size + 2
-        window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
-                                        text="0x72", anchor='n', fill='lightgray',
-                                        font=('Arial', 7))
-        
         window.palette_canvas.configure(scrollregion=window.palette_canvas.bbox("all"))
         
     except Exception as e:
         logging.error(f"Error rendering palette: {e}")
+
+def on_object_marker_click(object_type, window):
+    """Handle clicking an object marker in the palette"""
+    window.selected_tile = None
+    window.selected_object_type = object_type
+    update_tile_info(window)
+    window.status_var.set(f"Selected {object_type} - click map to place")
 
 def on_tile_click(tile_id, window):
     """Handle tile palette click"""
@@ -2346,18 +2657,71 @@ def on_tile_click(tile_id, window):
 
 def update_map_counters(window):
     """Update object counters"""
-    # TODO: Implement counter updates
-    pass
+    try:
+        objects = window.object_data[window.difficulty][window.selected_map]
+        
+        active_items = sum(1 for item in objects['items'] if item['active'])
+        window.items_label.config(text=f"Items: {active_items}/14")
+        
+        active_teleports = sum(1 for tp in objects['teleports'] if tp['y'] != 0)
+        window.teleports_label.config(text=f"Teleports: {active_teleports}/6")
+        
+        active_spawners = sum(1 for spawn in objects['spawns'] if spawn['y'] != 0)
+        window.spawners_label.config(text=f"Spawners: {active_spawners}/7")
+        
+        window.respawns_label.config(text=f"Respawns: {objects['respawn_count']}/3")
+        
+        # Validate keys vs keyholes
+        keys = sum(1 for item in objects['items'] if item['active'] and item['tile_id'] == 0x70)
+        keyholes = sum(1 for item in objects['items'] if item['active'] and item['tile_id'] == 0x72)
+        
+        if keyholes > keys:
+            window.validation_label.config(text=f"⚠ WARNING: {keyholes} keyholes but only {keys} keys!")
+        else:
+            window.validation_label.config(text="")
+            
+    except Exception as e:
+        logging.error(f"Error updating counters: {e}")
 
 def update_map_config_display(window):
     """Update map config display"""
-    # TODO: Implement config display
-    pass
+    try:
+        config = window.map_config[window.difficulty][window.selected_map]
+        window.time_limit_var.set(str(config['time_limit']))
+        window.spawn_rate_var.set(str(config['spawn_rate']))
+    except Exception as e:
+        logging.error(f"Error updating config display: {e}")
 
 def update_tile_info(window):
     """Update selected tile info"""
-    # TODO: Implement tile info
-    pass
+    try:
+        if window.selected_object_type:
+            window.tile_info_var.set(f"Selected: {window.selected_object_type}")
+            window.selected_tile_preview.config(image='')
+        elif window.selected_tile is not None:
+            window.tile_info_var.set(f"Selected: 0x{window.selected_tile:02X}")
+            
+            # Show tile preview
+            if window.selected_tile < len(all_tiles):
+                tile = all_tiles[window.selected_tile]
+                palette = palettes[window.selected_map]
+                color_tile = apply_palette_to_tile(tile, palette)
+                
+                # Scale 2x for visibility
+                color_tile_large = np.repeat(np.repeat(color_tile, 2, axis=0), 2, axis=1)
+                tile_rgb = color_tile_large[:, :, :3]
+                tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+                tile_photo = ImageTk.PhotoImage(tile_img)
+                
+                window.selected_tile_preview.config(image=tile_photo)
+                window.selected_tile_preview.image = tile_photo
+            else:
+                window.selected_tile_preview.config(image='')
+        else:
+            window.tile_info_var.set("Selected: None")
+            window.selected_tile_preview.config(image='')
+    except Exception as e:
+        logging.error(f"Error updating tile info: {e}")
 
 def save_map_editor_data(window):
     """Save all map editor data"""
