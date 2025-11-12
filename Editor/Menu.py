@@ -9,7 +9,6 @@ import logging
 from colorlog import ColoredFormatter
 import zipfile
 import tempfile
-import subprocess
 import sys
 
 #########################################
@@ -1292,8 +1291,6 @@ def initialize_map_editor_state(window):
     window.selected_tile = 0
     window.difficulty = 0
     window.selected_object_type = None  # 'spawner', 'teleporter', 'player_start', etc.
-    window.selected_composite = None  # 'teleporter', 'spawner_right', etc.
-    window.selected_spawner_dir = 'right'  # Default spawner direction
     
     # Object placement state
     window.teleporter_first_pos = None
