@@ -414,16 +414,28 @@ PALETTE_NAMES = [
 # Main Functions
 #########################################
 
-def create_window_icon(root, all_tiles, palettes):
-    """Create window icon from Tut mask tile"""
+def create_window_icon(root, tiles=None, palettes=None):
+    """Create window icon from Tut mask tile
+    
+    Args:
+        root: Tkinter window
+        tiles: Optional tile array (if None, loads from ROM)
+        palettes: Optional palette array (if None, loads from ROM)
+    """
     try:
-        from PIL import Image, ImageTk  # ensure these are imported
+        from PIL import Image, ImageTk
+        
+        # Load data if not provided
+        if tiles is None:
+            tiles = load_tiles()
+        if palettes is None:
+            palettes = load_palettes_from_rom()
 
         # Use middle Tut mask tile (0x87)
         tile_idx = 0x87
 
-        if tile_idx < len(all_tiles):
-            tile = all_tiles[tile_idx]
+        if tile_idx < len(tiles):
+            tile = tiles[tile_idx]
             palette = palettes[0]  # Use Map 1 palette
             color_tile = apply_palette_to_tile(tile, palette)
 
@@ -439,7 +451,7 @@ def create_window_icon(root, all_tiles, palettes):
             root.iconphoto(True, icon_photo)
 
             # Keep reference to prevent garbage collection
-            root._icon_ref = icon_photo  # store it in root
+            root._icon_ref = icon_photo
     except Exception:
         logging.warning("Couldn't set window icon", exc_info=True)
 
@@ -462,31 +474,20 @@ def trigger_callback(event_type, *args, **kwargs):
 #########################################
 
 def load_all(location=None):
-    global all_tiles, all_fonts, palettes, high_scores
-    
     try:
-        # Load all ROMs into memory first
         if location == "Zip":
             load_roms_from_zip()
         elif location == "Folder":
-                folder = filedialog.askdirectory(
-                    title="Select Folder That Contains Your Extracted Tutankham ROMs",
-                    initialdir=os.path.abspath("."))
-                if not folder:
-                    return  # User cancelled
-                load_roms_from_folder(folder)
+            folder = filedialog.askdirectory(
+                title="Select Folder That Contains Your Extracted Tutankham ROMs",
+                initialdir=os.path.abspath("."))
+            if not folder:
+                return
+            load_roms_from_folder(folder)
         else:
             load_all_roms()
-
-        # Load all data
-        all_tiles = load_tiles()
-        all_fonts = load_fonts()
-        palettes = load_palettes_from_rom()
-        high_scores = load_high_scores()
-        logging.info(
-                "Data loaded — %d tiles, %d palettes, %d high_scores",
-                len(all_tiles), len(palettes), len(high_scores)
-            )
+        
+        logging.info("ROMs loaded into cache")
     except Exception as e:
         logging.error(f"Error loading ROMs: {e}")
         messagebox.showerror("Error", f"Failed to load ROMs:\n{e}")
@@ -1434,7 +1435,6 @@ def launch_map_editor():
     """Launch the map editor in a new window"""
     global open_windows
     
-    # Check if window already exists
     if open_windows['map_editor'] is not None:
         try:
             open_windows['map_editor'].lift()
@@ -1444,13 +1444,16 @@ def launch_map_editor():
             open_windows['map_editor'] = None
     
     try:
-        # Create new window
         editor_window = tk.Toplevel(root)
         editor_window.title(f"Tutankham Map Editor {EDITOR_VERSION}")
         
-        # Calculate window size based on map at 3x zoom
-        map_display_width = map_width * 16 * 3  # 3072
-        map_display_height = map_height * 16 * 3  # 576
+        # Load data on-demand
+        window_tiles = load_tiles()  # Fresh load from rom_cache
+        window_palettes = load_palettes_from_rom()  # Fresh load
+        
+        # Calculate window size
+        map_display_width = map_width * 16 * 3
+        map_display_height = map_height * 16 * 3
         left_panel_width = 300
         palette_height = 250
         
@@ -1459,62 +1462,53 @@ def launch_map_editor():
         
         editor_window.geometry(f"{window_width}x{window_height}")
         
-        # Store reference
         open_windows['map_editor'] = editor_window
+        
+        # Store window-local data
+        editor_window.tiles = window_tiles
+        editor_window.palettes = window_palettes
         
         # Initialize editor state
         initialize_map_editor_state(editor_window)
         
-        # Register callbacks for palette/tile changes
+        # Register refresh callbacks
         def on_palette_changed(palette_idx):
-            # Reload palettes
-            palettes = load_palettes_from_rom()
-            # If this affects our current map, refresh
-            if palette_idx < 4:  # Map palettes
-                if editor_window.selected_map == palette_idx:
-                    render_map_view(editor_window)
-                    render_tile_palette(editor_window)
-            else:  # Unknown palettes - refresh anyway
-                render_map_view(editor_window)
-                render_tile_palette(editor_window)
+            # Reload palettes fresh from ROM
+            editor_window.palettes = load_palettes_from_rom()
+            render_map_view(editor_window)
+            render_tile_palette(editor_window)
         
         def on_tile_changed(tile_idx):
-            # Tile changed, refresh displays
+            # Reload tiles fresh from ROM
+            editor_window.tiles = load_tiles()
             render_map_view(editor_window)
             render_tile_palette(editor_window)
         
         register_callback('palette_changed', on_palette_changed)
         register_callback('tile_changed', on_tile_changed)
         
-        # Store callback references for cleanup
         editor_window._callbacks = [on_palette_changed, on_tile_changed]
         
-        # Clear reference when window is closed
         def on_close():
-            # Unregister callbacks
             if hasattr(editor_window, '_callbacks'):
                 for cb in editor_window._callbacks:
                     for event_type in state_callbacks:
                         if cb in state_callbacks[event_type]:
                             state_callbacks[event_type].remove(cb)
-            
             open_windows['map_editor'] = None
             editor_window.destroy()
         
         editor_window.protocol("WM_DELETE_WINDOW", on_close)
         
-        # Build the UI
         build_map_editor_ui(editor_window)
-        
-        # Display initial state
         render_map_view(editor_window)
         render_tile_palette(editor_window)
         update_map_counters(editor_window)
         update_map_config_display(editor_window)
         update_tile_info(editor_window)
         
-        # Set window icon
-        create_window_icon(editor_window, all_tiles, palettes)
+        # Set window icon with window-local data
+        create_window_icon(editor_window, editor_window.tiles, editor_window.palettes)
         
         logging.info("Map editor launched successfully")
         
@@ -1541,6 +1535,10 @@ def launch_tile_editor():
         editor_window.geometry("1800x1000")
         
         open_windows['tile_editor'] = editor_window
+        
+        # Load window-local data
+        editor_window.tiles = load_tiles()
+        editor_window.palettes = load_palettes_from_rom()
         
         def on_close():
             open_windows['tile_editor'] = None
@@ -1575,6 +1573,10 @@ def launch_font_editor():
         
         open_windows['font_editor'] = editor_window
         
+        # Load window-local data
+        editor_window.fonts = load_fonts()
+        editor_window.palettes = load_palettes_from_rom()
+        
         def on_close():
             open_windows['font_editor'] = None
             editor_window.destroy()
@@ -1607,6 +1609,9 @@ def launch_ui_graphics_editor():
         editor_window.geometry("800x900")
         
         open_windows['ui_graphics'] = editor_window
+        
+        # Load window-local data
+        editor_window.palettes = load_palettes_from_rom()
         
         def on_close():
             open_windows['ui_graphics'] = None
@@ -1641,6 +1646,9 @@ def launch_treasure_editor():
         
         open_windows['treasure_editor'] = editor_window
         
+        # Load window-local data
+        editor_window.palettes = load_palettes_from_rom()
+        
         def on_close():
             open_windows['treasure_editor'] = None
             editor_window.destroy()
@@ -1674,13 +1682,15 @@ def launch_high_score_editor():
         
         open_windows['high_score'] = editor_window
         
+        # Load window-local data
+        editor_window.high_scores = load_high_scores()
+        
         def on_close():
             open_windows['high_score'] = None
             editor_window.destroy()
         
         editor_window.protocol("WM_DELETE_WINDOW", on_close)
         
-        # Build high score editor UI
         build_high_score_window(editor_window)
         
     except Exception as e:
@@ -1707,13 +1717,15 @@ def launch_palette_editor():
         
         open_windows['palette'] = editor_window
         
+        # Load window-local data
+        editor_window.palettes = load_palettes_from_rom()
+        
         def on_close():
             open_windows['palette'] = None
             editor_window.destroy()
         
         editor_window.protocol("WM_DELETE_WINDOW", on_close)
         
-        # Build palette editor UI
         build_palette_window(editor_window)
         
     except Exception as e:
@@ -2711,14 +2723,15 @@ def render_map_view(window):
         map_image = np.zeros((visual_map.shape[0] * 16, visual_map.shape[1] * 16, 4), 
                             dtype=np.uint8)
         
-        palette = palettes[window.selected_map]
+        # Use window-local palette
+        palette = window.palettes[window.selected_map]
         
-        # Render each tile
+        # Render each tile using window-local tiles
         for row in range(visual_map.shape[0]):
             for col in range(visual_map.shape[1]):
                 tile_index = visual_map[row, col]
-                if tile_index < len(all_tiles):
-                    tile = all_tiles[tile_index]
+                if tile_index < len(window.tiles):
+                    tile = window.tiles[tile_index]
                     color_tile = apply_palette_to_tile(tile, palette)
                     map_image[row * 16 : (row + 1) * 16, col * 16 : (col + 1) * 16, :] = color_tile
         
@@ -2784,8 +2797,6 @@ def render_map_view(window):
 
 def draw_objects_overlay(window):
     """Draw object overlays on the map"""
-    global palettes  # Access global palettes
-    
     objects = window.object_data[window.difficulty][window.selected_map]
     
     # Clear existing overlay images
@@ -2834,9 +2845,9 @@ def draw_objects_overlay(window):
             # Draw filled box overlay if applicable
             if item['tile_id'] in FILLED_TO_EMPTY:
                 tile_idx = item['tile_id']
-                if tile_idx < len(all_tiles):
-                    tile = all_tiles[tile_idx]
-                    palette = palettes[window.selected_map]
+                if tile_idx < len(window.tiles):  # Use window-local tiles
+                    tile = window.tiles[tile_idx]
+                    palette = window.palettes[window.selected_map]  # Use window-local palette
                     color_tile = apply_palette_to_tile(tile, palette)
                     
                     scale = int(window.zoom_level)
@@ -2888,7 +2899,7 @@ def render_tile_palette(window):
     try:
         tile_spacing = 5
         tile_display_size = int(16 * window.zoom_level)
-        palette = palettes[window.selected_map]
+        palette = window.palettes[window.selected_map]  # Use window-local palette
         
         window.tile_images.clear()
         window.palette_canvas.delete('all')
@@ -2908,8 +2919,8 @@ def render_tile_palette(window):
         comp_img = np.zeros((16, 48, 4), dtype=np.uint8)
         for c in range(3):
             tile_idx = teleporter_display[0, c]
-            if tile_idx < len(all_tiles):
-                tile = all_tiles[tile_idx]
+            if tile_idx < len(window.tiles):  # Use window-local tiles
+                tile = window.tiles[tile_idx]
                 color_tile = apply_palette_to_tile(tile, palette)
                 comp_img[:, c*16:(c+1)*16] = color_tile
         
@@ -2943,8 +2954,8 @@ def render_tile_palette(window):
             for r in range(h):
                 for c in range(w):
                     tile_idx = tiles[r, c]
-                    if tile_idx < len(all_tiles):
-                        tile = all_tiles[tile_idx]
+                    if tile_idx < len(window.tiles):  # Use window-local tiles
+                        tile = window.tiles[tile_idx]
                         color_tile = apply_palette_to_tile(tile, palette)
                         comp_img[r*16:(r+1)*16, c*16:(c+1)*16] = color_tile
             
@@ -2981,7 +2992,7 @@ def render_tile_palette(window):
         treasure_pairs = [(0x21, 0x6F), (0x22, 0x70), (0x4A, 0x62)]
         for empty_id, filled_id in treasure_pairs:
             # Empty box
-            tile = all_tiles[empty_id]
+            tile = window.tiles[empty_id]  # Use window-local tiles
             color_tile = apply_palette_to_tile(tile, palette)
             scale = int(window.zoom_level)
             color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
@@ -3003,7 +3014,7 @@ def render_tile_palette(window):
             x_pos += tile_display_size + tile_spacing
             
             # Filled box
-            tile = all_tiles[filled_id]
+            tile = window.tiles[filled_id]  # Use window-local tiles
             color_tile = apply_palette_to_tile(tile, palette)
             color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
             tile_rgb = color_tile_large[:, :, :3]
@@ -3024,7 +3035,7 @@ def render_tile_palette(window):
             x_pos += tile_display_size + tile_spacing * 2
         
         # Add keyhole
-        tile = all_tiles[0x72]
+        tile = window.tiles[0x72]  # Use window-local tiles
         color_tile = apply_palette_to_tile(tile, palette)
         scale = int(window.zoom_level)
         color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
@@ -3062,7 +3073,7 @@ def render_tile_palette(window):
         ]
         
         for tile_id, obj_type, label_text in object_markers:
-            tile = all_tiles[tile_id]
+            tile = window.tiles[tile_id]  # Use window-local tiles
             color_tile = apply_palette_to_tile(tile, palette)
             scale = int(window.zoom_level)
             color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
@@ -3149,10 +3160,10 @@ def update_tile_info(window):
         elif window.selected_tile is not None:
             window.tile_info_var.set(f"Selected: 0x{window.selected_tile:02X}")
             
-            # Show tile preview
-            if window.selected_tile < len(all_tiles):
-                tile = all_tiles[window.selected_tile]
-                palette = palettes[window.selected_map]
+            # Show tile preview using window-local data
+            if window.selected_tile < len(window.tiles):
+                tile = window.tiles[window.selected_tile]  # Use window-local tiles
+                palette = window.palettes[window.selected_map]  # Use window-local palette
                 color_tile = apply_palette_to_tile(tile, palette)
                 
                 # Scale 2x for visibility
@@ -3283,8 +3294,7 @@ def rebuild_ui_graphic_display(window):
     
     # Get palette
     palette_idx = window._palette_dropdown.current()
-    palettes = load_palettes_from_rom()
-    palette = palettes[palette_idx]
+    palette = window.palettes[palette_idx]  # Use window-local palette
     
     # Extract pixels
     rom_data = rom_cache[config['rom']]
@@ -3323,13 +3333,6 @@ def rebuild_ui_graphic_display(window):
     canvas.bind('<Button-1>', lambda e: open_ui_graphic_editor(window, graphic_name))
     
     window.ui_status_label.config(text=f"Displaying: {graphic_name} - Click to edit (coming soon)")
-
-def open_ui_graphic_editor(window, graphic_name):
-    """Open pixel editor for a UI graphic"""
-    # TODO: Implement pixel-level editor
-    messagebox.showinfo("UI Graphics Editor", 
-                       f"Pixel editor for {graphic_name} coming soon!\n\n"
-                       f"This will allow you to edit individual pixels.")
 
 #########################################
 # Treasure Graphics Editor Functions
@@ -3443,8 +3446,7 @@ def rebuild_treasure_display(window):
     
     # Get palette
     palette_idx = window._palette_dropdown.current()
-    palettes = load_palettes_from_rom()
-    palette = palettes[palette_idx]
+    palette = window.palettes[palette_idx]  # Use window-local palette
     
     # Extract pixels
     rom_data = rom_cache[config['rom']]
@@ -3560,20 +3562,19 @@ def rebuild_font_grid(window):
     
     # Get current palette
     palette_idx = window._palette_dropdown.current()
-    palettes = load_palettes_from_rom()
-    palette = palettes[palette_idx]
+    palette = window.palettes[palette_idx]  # Use window-local palette
     
     # Grid configuration
     fonts_per_row = 15
     font_spacing = 10
-    font_scale = 10  # Display at 10x (80x80 pixels) - fonts are 8x8
+    font_scale = 10  # Display at 10x (80x80 pixels)
     
     # Configure grid to expand
     for i in range(fonts_per_row):
         font_frame.grid_columnconfigure(i, weight=1)
     
-    # Create grid of all 43 font characters
-    for font_idx in range(len(all_fonts)):
+    # Create grid of all 43 font characters using window-local data
+    for font_idx in range(len(window.fonts)):
         row = font_idx // fonts_per_row
         col = font_idx % fonts_per_row
         
@@ -3587,7 +3588,7 @@ def rebuild_font_grid(window):
         char_label.pack(pady=(5, 2))
         
         # Font image
-        font = all_fonts[font_idx]
+        font = window.fonts[font_idx]  # Use window-local fonts
 
         preview_tile = font.copy()
 
@@ -3616,14 +3617,13 @@ def rebuild_font_grid(window):
                        lambda e, fid=font_idx: open_font_editor(window, fid))
     
     # Log to confirm it's working
-    logging.info(f"Rebuilt font grid with {len(all_fonts)} characters using palette {palette_idx}")
+    logging.info(f"Rebuilt font grid with {len(window.fonts)} characters using palette {palette_idx}")
 
 def open_font_editor(window, font_idx):
     """Open font editor dialog for a specific character"""
     # Get current palette
     palette_idx = window._palette_dropdown.current()
-    palettes = load_palettes_from_rom()
-    palette = palettes[palette_idx]
+    palette = window.palettes[palette_idx]  # Use window-local palette
     
     # Create dialog
     dialog = tk.Toplevel(window)
@@ -3721,20 +3721,19 @@ def rebuild_tile_grid(window):
     
     # Get current palette
     palette_idx = window._palette_dropdown.current()
-    palettes = load_palettes_from_rom()
-    palette = palettes[palette_idx]
+    palette = window.palettes[palette_idx]  # Use window-local palette
     
     # Grid configuration
     tiles_per_row = 20
     tile_spacing = 10
-    tile_scale = 3  # Display at 3x (48x48 pixels) - bigger for better visibility
+    tile_scale = 3  # Display at 3x (48x48 pixels)
     
     # Configure grid to expand
     for i in range(tiles_per_row):
         tile_frame.grid_columnconfigure(i, weight=1)
     
-    # Create grid of all 160 tiles
-    for tile_idx in range(len(all_tiles)):
+    # Create grid of all 160 tiles using window-local data
+    for tile_idx in range(len(window.tiles)):
         row = tile_idx // tiles_per_row
         col = tile_idx % tiles_per_row
         
@@ -3748,7 +3747,7 @@ def rebuild_tile_grid(window):
         hex_label.pack(pady=(5, 2))
         
         # Tile image
-        tile = all_tiles[tile_idx]
+        tile = window.tiles[tile_idx]  # Use window-local tiles
         color_tile = apply_palette_to_tile(tile, palette)
         
         # Scale up
@@ -3769,21 +3768,20 @@ def rebuild_tile_grid(window):
                        lambda e, tid=tile_idx: open_tile_editor(window, tid))
         
     # Log to confirm it's working
-    logging.info(f"Rebuilt tile grid with {len(all_tiles)} tiles using palette {palette_idx}")
+    logging.info(f"Rebuilt tile grid with {len(window.tiles)} tiles using palette {palette_idx}")
 
 def open_tile_editor(window, tile_idx):
     """Open tile editor dialog for a specific tile"""
     # Get current palette
     palette_idx = window._palette_dropdown.current()
-    palettes = load_palettes_from_rom()
-    palette = palettes[palette_idx]
+    palette = window.palettes[palette_idx]  # Use window-local palette
     
     # Create dialog
     dialog = tk.Toplevel(window)
     dialog.title(f"Edit Tile 0x{tile_idx:02X} - {get_tile_name(tile_idx)}")
     dialog.geometry("400x500")
     dialog.transient(window)
-    dialog.update_idletasks()  # Ensure window is ready
+    dialog.update_idletasks()
     dialog.grab_set()
     
     main_frame = ttk.Frame(dialog, padding=10)
@@ -3931,35 +3929,36 @@ def build_high_score_row_grid(window, parent, high_scores, index, label, row):
 def update_high_score_entry(index, score_var, name_var, stage_var, window):
     """Update a single high score entry"""
     try:
+        # Load fresh from ROM
         high_scores = load_high_scores()
         
-        # Validate and update score
         score_int = int(score_var.get())
         if score_int < 0 or score_int > 999999:
             messagebox.showwarning("Invalid Score", "Score must be between 0 and 999,999")
             return
         
         high_scores[index]['score'] = int_to_bcd(score_int)
-
-        # Update name
+        
         name = name_var.get().upper()[:3]
         if not all(32 <= ord(c) < 127 for c in name):
             messagebox.showwarning("Invalid Name", "Name must contain only ASCII characters")
             return
         high_scores[index]['name'] = name
         
-        # Update stage
         stage = int(stage_var.get())
         if stage < 0 or stage > 255:
             messagebox.showwarning("Invalid Stage", "Stage must be between 0 and 255")
             return
         high_scores[index]['stage'] = stage
         
-        sort_high_scores(high_scores)               	# Sort High Scores
-        sync_high_score(high_scores)		            # Sync High Score With 1ST Place
-        save_high_scores(high_scores)		            # Save High Scores
-        rebuild_high_score_entries(window)              # Rebuild UI to show changes
-
+        sort_high_scores(high_scores)
+        sync_high_score(high_scores)
+        save_high_scores(high_scores)  # Writes to rom_cache
+        
+        # Reload this window's data
+        window.high_scores = load_high_scores()
+        rebuild_high_score_entries(window)
+        
         window.hs_status_label.config(text=f"Successfully Updated Entry {index}")
         
     except ValueError:
@@ -4231,34 +4230,28 @@ def update_color_preview(canvas, red_var, green_var, blue_var):
 def apply_palette_color(window, dialog, palette_idx, color_idx, red_var, green_var, blue_var):
     """Apply the edited color to the palette"""
     try:
-        # Get bit values
         r_bits = int(red_var.get())
         g_bits = int(green_var.get())
         b_bits = int(blue_var.get())
         
-        # Scale to 0-255
         r = int(r_bits * 255 / 7)
         g = int(g_bits * 255 / 7)
         b = int(b_bits * 255 / 3)
         
-        # Update palette in memory
-        palettes = load_palettes_from_rom()
-        palettes[palette_idx][color_idx] = (255, r, g, b)
-        
-        # Write to ROM cache
+        # Write to ROM cache (single source of truth)
         palette_offset = PALETTE_FILE_OFFSETS[palette_idx]
         palette_byte = encode_palette_byte(r, g, b)
         rom_cache[ROM_CONFIG['palette_rom']][palette_offset + color_idx] = palette_byte
         
-        # Close dialog
         dialog.destroy()
         
-        # Rebuild palette grid
+        # Reload this window's palette data
+        window.palettes = load_palettes_from_rom()
         rebuild_palette_grid(window)
         
         window.pal_status_label.config(text=f"Updated {PALETTE_NAMES[palette_idx]} color {color_idx}")
 
-        # NOTIFY OTHER WINDOWS
+        # NOTIFY OTHER WINDOWS to reload their data
         trigger_callback('palette_changed', palette_idx)
 
     except Exception as e:
@@ -4391,12 +4384,12 @@ menubar.add_cascade(label="Help", menu=helpmenu)
 # Main Code
 #########################################
 
-root.config(menu=menubar)				            # Attach to window
-all_tiles = all_fonts = None                        # Initialize Global Variables
-visual_maps = logical_maps = None		            # Initialize Global Variables
-palettes = high_scores = None			            # Initialize Global Variables
-load_all("Zip")						                # Load initial data from zip
-create_window_icon(root, all_tiles, palettes)		# Create Window Icon
+root.config(menu=menubar)				                # Attach to window
+all_tiles = all_fonts = None                            # Initialize Global Variables
+visual_maps = logical_maps = None		                # Initialize Global Variables
+palettes = high_scores = None			                # Initialize Global Variables
+load_all("Zip")						                    # Load initial data from zip
+create_window_icon(root)                                # Create Window Icon
 
 # Add a status label to main window
 status_frame = ttk.Frame(root)
