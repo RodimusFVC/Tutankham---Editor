@@ -1291,16 +1291,18 @@ def initialize_map_editor_state(window):
     window.selected_map = 0
     window.selected_tile = 0
     window.difficulty = 0
-    window.selected_object_type = None  # 'spawner', 'teleporter', 'player_start', etc.
-    
+    window.selected_object_type   = None  # 'spawner', 'teleporter', 'player_start', etc.
+    window.selected_composite     = None  # Track composite object selection
+    window.selected_spawner_dir   = None  # Track spawner direction
+
     # Object placement state
-    window.teleporter_first_pos = None
-    window.dragging_object = None
-    window.drag_ghost_pos = None
-    window.selected_door = None
-    window.door_drag_start = None
-    window.door_ghost_pos = None
-    window.selected_player_start = None
+    window.teleporter_first_pos   = None
+    window.dragging_object        = None
+    window.drag_ghost_pos         = None
+    window.selected_door          = None
+    window.door_drag_start        = None
+    window.door_ghost_pos         = None
+    window.selected_player_start  = None
     window.player_start_ghost_pos = None
     
     # Display settings
@@ -3201,8 +3203,6 @@ def build_ui_graphics_window(window):
                           font=('Arial', 9))
     info_label.pack(pady=5)
     
-    ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-    
     # Control frame
     control_frame = ttk.Frame(main_frame)
     control_frame.pack(fill=tk.X, pady=5)
@@ -3237,6 +3237,9 @@ def build_ui_graphics_window(window):
                          lambda e: rebuild_ui_graphic_display(window))
     window._palette_dropdown = palette_dropdown
     
+    ttk.Button(control_frame, text="Close", 
+              command=window.destroy).pack(side=tk.RIGHT, padx=5)
+
     ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
     
     # Info frame (shows description)
@@ -3254,13 +3257,6 @@ def build_ui_graphics_window(window):
     window._display_image = None
     
     ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-    
-    # Button frame
-    button_frame = ttk.Frame(main_frame)
-    button_frame.pack(fill=tk.X, pady=10)
-    
-    ttk.Button(button_frame, text="Close", 
-              command=window.destroy).pack(side=tk.RIGHT, padx=5)
     
     # Status
     window.ui_status_frame = ttk.Frame(main_frame)
@@ -3334,6 +3330,13 @@ def rebuild_ui_graphic_display(window):
     
     window.ui_status_label.config(text=f"Displaying: {graphic_name} - Click to edit (coming soon)")
 
+def open_ui_graphic_editor(window, graphic_name):
+    """Open pixel editor for a UI graphic"""
+    # TODO: Implement pixel-level editor
+    messagebox.showinfo("UI Graphics Editor", 
+                       f"Pixel editor for {graphic_name} coming soon!\n\n"
+                       f"This will allow you to edit individual pixels.")
+
 #########################################
 # Treasure Graphics Editor Functions
 #########################################
@@ -3352,8 +3355,6 @@ def build_treasure_window(window):
                           text="Select an end-of-level treasure to view and edit",
                           font=('Arial', 9))
     info_label.pack(pady=5)
-    
-    ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
     
     # Control frame
     control_frame = ttk.Frame(main_frame)
@@ -3388,7 +3389,10 @@ def build_treasure_window(window):
     palette_dropdown.bind("<<ComboboxSelected>>", 
                          lambda e: rebuild_treasure_display(window))
     window._palette_dropdown = palette_dropdown
-    
+
+    ttk.Button(control_frame, text="Close", 
+              command=window.destroy).pack(side=tk.RIGHT, padx=5)
+
     ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
     
     # Info frame
@@ -3406,13 +3410,6 @@ def build_treasure_window(window):
     window._display_image = None
     
     ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-    
-    # Button frame
-    button_frame = ttk.Frame(main_frame)
-    button_frame.pack(fill=tk.X, pady=10)
-    
-    ttk.Button(button_frame, text="Close", 
-              command=window.destroy).pack(side=tk.RIGHT, padx=5)
     
     # Status
     window.treasure_status_frame = ttk.Frame(main_frame)
@@ -3822,6 +3819,14 @@ def build_high_score_window(window):
                           font=('Arial', 9))
     info_label.pack(pady=5)
     
+    # Utility buttons
+    button_frame = ttk.Frame(main_frame)
+    button_frame.pack(fill=tk.X, pady=10)
+    
+    ttk.Button(button_frame, text="Reset to Defaults", 
+              command=lambda: reset_high_scores(window)).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Close", 
+              command=window.destroy).pack(side=tk.RIGHT, padx=5)
     
     ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
     
@@ -3836,15 +3841,6 @@ def build_high_score_window(window):
     rebuild_high_score_entries(window)
 
     ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-
-    # Utility buttons
-    button_frame = ttk.Frame(main_frame)
-    button_frame.pack(fill=tk.X, pady=10)
-    
-    ttk.Button(button_frame, text="Reset to Defaults", 
-              command=lambda: reset_high_scores(window)).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Close", 
-              command=window.destroy).pack(side=tk.RIGHT, padx=5)
 
     # Add a status frame
     window.hs_status_frame = ttk.Frame(main_frame)
@@ -4021,6 +4017,15 @@ def build_palette_window(window):
                           font=('Arial', 9))
     info_label.pack(pady=5)
     
+    # Utility buttons
+    button_frame = ttk.Frame(main_frame)
+    button_frame.pack(fill=tk.X, pady=10)
+    
+    ttk.Button(button_frame, text="Reset to Defaults", 
+              command=lambda: reset_palettes(window)).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Close", 
+              command=window.destroy).pack(side=tk.RIGHT, padx=5)
+    
     ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
     
     content_frame = ttk.Frame(main_frame)
@@ -4034,15 +4039,6 @@ def build_palette_window(window):
     rebuild_palette_grid(window)
     
     ttk.Separator(main_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-    
-    # Utility buttons
-    button_frame = ttk.Frame(main_frame)
-    button_frame.pack(fill=tk.X, pady=10)
-    
-    ttk.Button(button_frame, text="Reset to Defaults", 
-              command=lambda: reset_palettes(window)).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Close", 
-              command=window.destroy).pack(side=tk.RIGHT, padx=5)
     
     # Status frame
     window.pal_status_frame = ttk.Frame(main_frame)
