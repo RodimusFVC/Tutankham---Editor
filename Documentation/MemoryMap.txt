@@ -355,7 +355,7 @@
 | m4.4h  | 0xD7C5-0xD7C7   | 3B    | Value 05                        | 00 00 50                   |
 | m4.4h  | 0xD7C8-0xD7CA   | 3B    | Value 06                        | 00 01 00                   |
 | m4.4h  | 0xD7CB-0xD7CD   | 3B    | Value 07                        | 00 02 00                   |
-| m4.4h  | 0xD7CE-0xD7D0   | 3B    | Key Pickup Value                | 00 05 00                   |
+| m4.4h  | 0xD7CE-0xD7D0   | 3B    | Key Pickup Value                | 00 05 00  ( 500 Points)    |
 | m4.4h  | 0xD7D1-0xD7D3   | 3B    | Value 09                        | 00 04 00                   |
 | m4.4h  | 0xD7D4-0xD7D6   | 3B    | Unlock Keyhole                  | 00 10 00                   |
 | m4.4h  | 0xD7D7-0xD7D9   | 3B    | First Treasure Pickup Value     | 00 05 00  ( 500 Points)    |

@@ -160,16 +160,6 @@ Unknown Reference Table:
 | 3j.3h  | 0xC104-0xC105   | 2B    | Entry #54                       | C1 34                      |
 | 3j.3h  | 0xC106-0xC107   | 2B    | Entry #55                       | C1 71                      |
 
-J6 ROM (0xFxxx Block):
-00 22 00 06 
-C6 CC 40 06 
-C6 3C 14 66 
-00 CC 43 66 
-C6 3C 14 66 
-C6 CC 40 06 
-00 22 00 06 
-00 00 00 00
-
 M4 ROM (0xDxxx Block):
 Map Level Block Range Definition (0x979 - 0x980)
 Map 1 Reference : 0x979 : D9 81
