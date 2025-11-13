@@ -837,6 +837,26 @@ def load_tiles():
             all_tiles.append(rotated_tile)
     return all_tiles
 
+def save_tile_changes(tile_idx, new_tile_data):
+    """Save edited tile back to ROM cache"""
+    # Calculate which ROM and offset
+    rom_index = tile_idx // 32
+    tile_in_rom = tile_idx % 32
+    
+    rom_name = ROM_CONFIG['tile_roms'][rom_index]
+    offset = tile_in_rom * tile_size
+    
+    # Convert tile data back to ROM format (interleaved nibbles)
+    # ... conversion code here ...
+    
+    # Write to rom_cache
+    rom_cache[rom_name][offset:offset+tile_size] = converted_data
+    
+    # Trigger callback to refresh other windows
+    trigger_callback('tile_changed', tile_idx)
+    
+    logging.info(f"Saved tile 0x{tile_idx:02X}")
+
 def get_tile_name(tile_id):
     """Get human-readable name for a tile"""
     return TILE_NAMES.get(tile_id, f"Tile {tile_id:02X}")
@@ -1542,7 +1562,21 @@ def launch_tile_editor():
         editor_window.tiles = load_tiles()
         editor_window.palettes = load_palettes_from_rom()
         
+        # Register refresh callbacks
+        def on_palette_changed(palette_idx):
+            editor_window.palettes = load_palettes_from_rom()
+            rebuild_tile_grid(editor_window)
+        
+        register_callback('palette_changed', on_palette_changed)
+        editor_window._callbacks = [on_palette_changed]
+        
         def on_close():
+            # Clean up callbacks
+            if hasattr(editor_window, '_callbacks'):
+                for cb in editor_window._callbacks:
+                    for event_type in state_callbacks:
+                        if cb in state_callbacks[event_type]:
+                            state_callbacks[event_type].remove(cb)
             open_windows['tile_editor'] = None
             editor_window.destroy()
         
@@ -1579,7 +1613,21 @@ def launch_font_editor():
         editor_window.fonts = load_fonts()
         editor_window.palettes = load_palettes_from_rom()
         
+        # Register refresh callbacks
+        def on_palette_changed(palette_idx):
+            editor_window.palettes = load_palettes_from_rom()
+            rebuild_font_grid(editor_window)
+        
+        register_callback('palette_changed', on_palette_changed)
+        editor_window._callbacks = [on_palette_changed]
+        
         def on_close():
+            # Clean up callbacks
+            if hasattr(editor_window, '_callbacks'):
+                for cb in editor_window._callbacks:
+                    for event_type in state_callbacks:
+                        if cb in state_callbacks[event_type]:
+                            state_callbacks[event_type].remove(cb)
             open_windows['font_editor'] = None
             editor_window.destroy()
         
@@ -1615,7 +1663,21 @@ def launch_ui_graphics_editor():
         # Load window-local data
         editor_window.palettes = load_palettes_from_rom()
         
+        # Register refresh callbacks
+        def on_palette_changed(palette_idx):
+            editor_window.palettes = load_palettes_from_rom()
+            rebuild_ui_graphic_display(editor_window)
+        
+        register_callback('palette_changed', on_palette_changed)
+        editor_window._callbacks = [on_palette_changed]
+        
         def on_close():
+            # Clean up callbacks
+            if hasattr(editor_window, '_callbacks'):
+                for cb in editor_window._callbacks:
+                    for event_type in state_callbacks:
+                        if cb in state_callbacks[event_type]:
+                            state_callbacks[event_type].remove(cb)
             open_windows['ui_graphics'] = None
             editor_window.destroy()
         
@@ -1651,7 +1713,21 @@ def launch_treasure_editor():
         # Load window-local data
         editor_window.palettes = load_palettes_from_rom()
         
+        # Register refresh callbacks
+        def on_palette_changed(palette_idx):
+            editor_window.palettes = load_palettes_from_rom()
+            rebuild_treasure_display(editor_window)
+        
+        register_callback('palette_changed', on_palette_changed)
+        editor_window._callbacks = [on_palette_changed]
+        
         def on_close():
+            # Clean up callbacks
+            if hasattr(editor_window, '_callbacks'):
+                for cb in editor_window._callbacks:
+                    for event_type in state_callbacks:
+                        if cb in state_callbacks[event_type]:
+                            state_callbacks[event_type].remove(cb)
             open_windows['treasure_editor'] = None
             editor_window.destroy()
         
