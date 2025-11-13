@@ -1135,7 +1135,7 @@ def find_teleporters(map_index):
                 continue  # Empty slot
             
             # Get coordinates
-            center_col = tp['y'] // 0x08
+            col = tp['y'] // 0x08
             bottom_row_from_bottom = tp['bottom_row'] // 0x08
             top_row_from_bottom = tp['top_row'] // 0x08
             
@@ -1144,7 +1144,7 @@ def find_teleporters(map_index):
             top_row = (map_height - 1) - top_row_from_bottom
             
             # Validate bounds
-            if center_col < 0 or center_col >= map_width:
+            if col < 0 or col >= map_width:
                 continue
             if bottom_row < 0 or bottom_row >= map_height:
                 continue
@@ -1156,15 +1156,15 @@ def find_teleporters(map_index):
                 continue
             
             # Validate both endpoints on walkable tiles (visual)
-            if visual_map[bottom_row, center_col] != 0x26:
+            if visual_map[bottom_row, col] != 0x26:
                 continue
-            if visual_map[top_row, center_col] != 0x26:
+            if visual_map[top_row, col] != 0x26:
                 continue
             
             # Validate both endpoints on walkable tiles (logical)
-            logical_row_bottom = center_col
+            logical_row_bottom = col
             logical_col_bottom = bottom_row + 1
-            logical_row_top = center_col
+            logical_row_top = col
             logical_col_top = top_row + 1
             
             if not np.array_equal(logical_map[logical_row_bottom, logical_col_bottom], [0x00, 0x00]):
@@ -1173,8 +1173,8 @@ def find_teleporters(map_index):
                 continue
             
             # Valid teleporter found
-            if center_col not in teleporter_cols:
-                teleporter_cols.append(center_col)
+            if col not in teleporter_cols:
+                teleporter_cols.append(col)
     
     return teleporter_cols
 
@@ -1195,16 +1195,19 @@ def validate_teleporters(window):
                 is_valid = True
                 
                 # Get coordinates
-                center_col = tp['y'] // 0x08
+                col = tp['y'] // 0x08
                 bottom_row_from_bottom = tp['bottom_row'] // 0x08
                 top_row_from_bottom = tp['top_row'] // 0x08
                 
                 # Convert to array indices (flip row)
                 bottom_row = (map_height - 1) - bottom_row_from_bottom
                 top_row = (map_height - 1) - top_row_from_bottom
-                
+
+                logical_col_bottom = bottom_row_from_bottom + 1
+                logical_col_top = top_row_from_bottom + 1
+
                 # Validate column in bounds
-                if center_col < 0 or center_col >= map_width:
+                if col < 0 or col >= map_width:
                     logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} column out of bounds, removing")
                     is_valid = False
                 
@@ -1219,31 +1222,33 @@ def validate_teleporters(window):
                     is_valid = False
                 
                 # Validate both endpoints on walkable tiles (visual 0x26)
-                if is_valid and visual_map[bottom_row, center_col] != 0x26:
+                if is_valid and visual_map[bottom_row, col] != 0x26:
                     logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} bottom not on walkable tile (visual), removing")
                     is_valid = False
                 
-                if is_valid and visual_map[top_row, center_col] != 0x26:
+                if is_valid and visual_map[top_row, col] != 0x26:
                     logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} top not on walkable tile (visual), removing")
                     is_valid = False
                 
                 # Validate both endpoints on walkable tiles (logical 0x00, 0x00)
                 if is_valid:
-                    logical_row_bottom = center_col
-                    logical_col_bottom = bottom_row + 1
-                    logical_row_top = center_col
-                    logical_col_top = top_row + 1
-                    
-                    if not np.array_equal(logical_map[logical_row_bottom, logical_col_bottom], [0x00, 0x00]):
+                   
+                    if not np.array_equal(logical_map[col, logical_col_bottom], [0x00, 0x00]):
                         logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} bottom not on walkable tile (logical), removing")
                         is_valid = False
                     
-                    if is_valid and not np.array_equal(logical_map[logical_row_top, logical_col_top], [0x00, 0x00]):
+                    if is_valid and not np.array_equal(logical_map[col, logical_col_top], [0x00, 0x00]):
                         logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} top not on walkable tile (logical), removing")
                         is_valid = False
                 
                 # Remove if invalid
                 if not is_valid:
+                    logging.info (f"Validating Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} : ")
+                    logging.info (f"  Data Object  : Column 0x{tp['y']:04X}, Row 1 0x{tp['top_row']:02X}, Row 2 0x{tp['bottom_row']:02X}")
+                    logging.info (f"  Visual Data  : Row 1 Tile 0x{visual_map[top_row, col]:02X} / Row 2 Tile 0x{visual_map[bottom_row, col]:02X}")
+                    logging.info (f"  Visual  Row 1 {top_row} / Row 2 {bottom_row}")
+                    logging.info (f"  Logical Row 1 {logical_col_top} / Row 2 {logical_col_bottom}")
+                    logging.info (f"  Logical Data : Row 1 Values {logical_map[col, logical_col_top]} / Row 2 Values {logical_map[col, logical_col_bottom]}")
                     tp['y'] = 0
                     tp['top_row'] = 0
                     tp['bottom_row'] = 0
@@ -2736,7 +2741,7 @@ def draw_objects_overlay(window):
         # Draw colored outline
         size = 16 * scale
         window.map_canvas.create_rectangle(x, y, x+size, y+size,
-                                         outline=outline_color, width=2, tags='object_overlay')
+                                         outline=outline_color, width=3, tags='object_overlay')
     
     # Player start (lime outline, 0x29 sprite)
     ps = objects['player_start']
@@ -2776,7 +2781,7 @@ def draw_objects_overlay(window):
                 tile_id = item['tile_id']
                 # Keys: 0x70 (green), Treasures: 0x62 (green), Rings: 0x6F (green), Keyholes: 0x72 (purple)
                 if tile_id == 0x72:  # Keyhole gets purple outline
-                    draw_sprite_overlay(tile_id, row, col, 'purple', alpha=200)
+                    draw_sprite_overlay(tile_id, row, col, 'magenta', alpha=200)
                 else:  # Keys, treasures, rings get green outline
                     draw_sprite_overlay(tile_id, row, col, 'green', alpha=200)
     
