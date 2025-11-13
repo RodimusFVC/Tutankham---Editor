@@ -80,7 +80,7 @@
 | m1.1h  | 0xA62C-0xA62E   | 3B    | Map 1/D1 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xA62F-0xA631   | 3B    | Map 1/D1 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xA632-0xA634   | 3B    | Map 1/D1 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m1.1h  | 0xA635-0xA635   | 1B    | Map 1/D1 Respawn Count          | 0x00-0x03                  |
+| m1.1h  | 0xA635-0xA635   | 1B    | Map 1/D1 Map Width              | (Value + 0x01) Screens     |
 | m1.1h  | 0xA636-0xA715   | 224B  | Map 1/D1 Items Block            | 14 items × 16B             |
 | m1.1h  | 0xA716-0xA716   | 1B    | Map 1/D1 Separator              | Always 0x00                |
 | m1.1h  | 0xA717-0xA746   | 48B   | Map 1/D1 Teleports Block        | 6 teleports × 8B           |
@@ -94,7 +94,7 @@
 | m1.1h  | 0xA774-0xA776   | 3B    | Map 2/D1 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xA777-0xA779   | 3B    | Map 2/D1 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xA77A-0xA77C   | 3B    | Map 2/D1 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m1.1h  | 0xA77D-0xA77D   | 1B    | Map 2/D1 Respawn Count          | 0x00-0x03                  |
+| m1.1h  | 0xA77D-0xA77D   | 1B    | Map 2/D1 Map Width              | (Value + 0x01) Screens     |
 | m1.1h  | 0xA77E-0xA85D   | 224B  | Map 2/D1 Items Block            | 14 items × 16B             |
 | m1.1h  | 0xA85E-0xA85E   | 1B    | Map 2/D1 Separator              | Always 0x00                |
 | m1.1h  | 0xA85F-0xA88E   | 48B   | Map 2/D1 Teleports Block        | 6 teleports × 8B           |
@@ -108,7 +108,7 @@
 | m1.1h  | 0xA8BC-0xA8BE   | 3B    | Map 3/D1 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xA8BF-0xA8C1   | 3B    | Map 3/D1 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xA8C2-0xA8C4   | 3B    | Map 3/D1 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m1.1h  | 0xA8C5-0xA8C5   | 1B    | Map 3/D1 Respawn Count          | 0x00-0x03                  |
+| m1.1h  | 0xA8C5-0xA8C5   | 1B    | Map 3/D1 Map Width              | (Value + 0x01) Screens     |
 | m1.1h  | 0xA8C6-0xA9A5   | 224B  | Map 3/D1 Items Block            | 14 items × 16B             |
 | m1.1h  | 0xA9A6-0xA9A6   | 1B    | Map 3/D1 Separator              | Always 0x00                |
 | m1.1h  | 0xA9A7-0xA9D6   | 48B   | Map 3/D1 Teleports Block        | 6 teleports × 8B           |
@@ -122,7 +122,7 @@
 | m1.1h  | 0xAA04-0xAA06   | 3B    | Map 4/D1 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xAA07-0xAA09   | 3B    | Map 4/D1 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xAA0A-0xAA0C   | 3B    | Map 4/D1 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m1.1h  | 0xAA0D-0xAA0D   | 1B    | Map 4/D1 Respawn Count          | 0x00-0x03                  |
+| m1.1h  | 0xAA0D-0xAA0D   | 1B    | Map 4/D1 Map Width              | (Value + 0x01) Screens     |
 | m1.1h  | 0xAA0E-0xAAED   | 224B  | Map 4/D1 Items Block            | 14 items × 16B             |
 | m1.1h  | 0xAAEE-0xAAEE   | 1B    | Map 4/D1 Separator              | Always 0x00                |
 | m1.1h  | 0xAAEF-0xAB1E   | 48B   | Map 4/D1 Teleports Block        | 6 teleports × 8B           |
@@ -136,7 +136,7 @@
 | m1.1h  | 0xAB4C-0xAB4E   | 3B    | Map 1/D2 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xAB4F-0xAB51   | 3B    | Map 1/D2 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xAB52-0xAB54   | 3B    | Map 1/D2 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m1.1h  | 0xAB55-0xAB55   | 1B    | Map 1/D2 Respawn Count          | 0x00-0x03                  |
+| m1.1h  | 0xAB55-0xAB55   | 1B    | Map 1/D2 Map Width              | (Value + 0x01) Screens     |
 | m1.1h  | 0xAB56-0xAC35   | 224B  | Map 1/D2 Items Block            | 14 items × 16B             |
 | m1.1h  | 0xAC36-0xAC36   | 1B    | Map 1/D2 Separator              | Always 0x00                |
 | m1.1h  | 0xAC37-0xAC66   | 48B   | Map 1/D2 Teleports Block        | 6 teleports × 8B           |
@@ -150,7 +150,7 @@
 | m1.1h  | 0xAC94-0xAC96   | 3B    | Map 2/D2 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xAC97-0xAC99   | 3B    | Map 2/D2 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xAC9A-0xAC9C   | 3B    | Map 2/D2 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m1.1h  | 0xAC9D-0xAC9D   | 1B    | Map 2/D2 Respawn Count          | 0x00-0x03                  |
+| m1.1h  | 0xAC9D-0xAC9D   | 1B    | Map 2/D2 Map Width              | (Value + 0x01) Screens     |
 | m1.1h  | 0xAC9E-0xAD7D   | 224B  | Map 2/D2 Items Block            | 14 items × 16B             |
 | m1.1h  | 0xAD7E-0xAD7E   | 1B    | Map 2/D2 Separator              | Always 0x00                |
 | m1.1h  | 0xAD7F-0xADAE   | 48B   | Map 2/D2 Teleports Block        | 6 teleports × 8B           |
@@ -164,7 +164,7 @@
 | m1.1h  | 0xADDC-0xADDE   | 3B    | Map 3/D2 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xADDF-0xADE1   | 3B    | Map 3/D2 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m1.1h  | 0xADE2-0xADE4   | 3B    | Map 3/D2 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m1.1h  | 0xADE5-0xADE5   | 1B    | Map 3/D2 Respawn Count          | 0x00-0x03                  |
+| m1.1h  | 0xADE5-0xADE5   | 1B    | Map 3/D2 Map Width              | (Value + 0x01) Screens     |
 | m1.1h  | 0xADE6-0xAEC5   | 224B  | Map 3/D2 Items Block            | 14 items × 16B             |
 | m1.1h  | 0xAEC6-0xAEC6   | 1B    | Map 3/D2 Separator              | Always 0x00                |
 | m1.1h  | 0xAEC7-0xAEF6   | 48B   | Map 3/D2 Teleports Block        | 6 teleports × 8B           |
@@ -178,7 +178,7 @@
 | m2.2h  | 0xAF24-0xAF26   | 3B    | Map 4/D2 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xAF27-0xAF29   | 3B    | Map 4/D2 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xAF2A-0xAF2C   | 3B    | Map 4/D2 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m2.2h  | 0xAF2D-0xAF2D   | 1B    | Map 4/D2 Respawn Count          | 0x00-0x03                  |
+| m2.2h  | 0xAF2D-0xAF2D   | 1B    | Map 4/D2 Map Width              | (Value + 0x01) Screens     |
 | m2.2h  | 0xAF2E-0xAFFF   | 210B  | Map 4/D2 Items Block            | 14 items × 16B (Part 1)    |
 | m2.2h  | 0xB000-0xB00D   | 14B   | Map 4/D2 Items Block            | 14 items × 16B (Part 2)    |
 | m2.2h  | 0xB00E-0xB00E   | 1B    | Map 4/D2 Separator              | Always 0x00                |
@@ -193,7 +193,7 @@
 | m2.2h  | 0xB06C-0xB06E   | 3B    | Map 1/D3 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB06F-0xB071   | 3B    | Map 1/D3 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB072-0xB074   | 3B    | Map 1/D3 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m2.2h  | 0xB075-0xB075   | 1B    | Map 1/D3 Respawn Count          | 0x00-0x03                  |
+| m2.2h  | 0xB075-0xB075   | 1B    | Map 1/D3 Map Width              | (Value + 0x01) Screens     |
 | m2.2h  | 0xB076-0xB155   | 224B  | Map 1/D3 Items Block            | 14 items × 16B             |
 | m2.2h  | 0xB156-0xB156   | 1B    | Map 1/D3 Separator              | Always 0x00                |
 | m2.2h  | 0xB157-0xB186   | 48B   | Map 1/D3 Teleports Block        | 6 teleports × 8B           |
@@ -207,7 +207,7 @@
 | m2.2h  | 0xB1B4-0xB1B6   | 3B    | Map 2/D3 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB1B7-0xB1B9   | 3B    | Map 2/D3 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB1BA-0xB1BC   | 3B    | Map 2/D3 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m2.2h  | 0xB1BD-0xB1BD   | 1B    | Map 2/D3 Respawn Count          | 0x00-0x03                  |
+| m2.2h  | 0xB1BD-0xB1BD   | 1B    | Map 2/D3 Map Width              | (Value + 0x01) Screens     |
 | m2.2h  | 0xB1BE-0xB29D   | 224B  | Map 2/D3 Items Block            | 14 items × 16B             |
 | m2.2h  | 0xB29E-0xB29E   | 1B    | Map 2/D3 Separator              | Always 0x00                |
 | m2.2h  | 0xB29F-0xB2CE   | 48B   | Map 2/D3 Teleports Block        | 6 teleports × 8B           |
@@ -221,7 +221,7 @@
 | m2.2h  | 0xB2FC-0xB2FE   | 3B    | Map 3/D3 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB2FF-0xB301   | 3B    | Map 3/D3 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB302-0xB304   | 3B    | Map 3/D3 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m2.2h  | 0xB305-0xB305   | 1B    | Map 3/D3 Respawn Count          | 0x00-0x03                  |
+| m2.2h  | 0xB305-0xB305   | 1B    | Map 3/D3 Map Width              | (Value + 0x01) Screens     |
 | m2.2h  | 0xB306-0xB3E5   | 224B  | Map 3/D3 Items Block            | 14 items × 16B             |
 | m2.2h  | 0xB3E6-0xB3E6   | 1B    | Map 3/D3 Separator              | Always 0x00                |
 | m2.2h  | 0xB3E7-0xB416   | 48B   | Map 3/D3 Teleports Block        | 6 teleports × 8B           |
@@ -235,7 +235,7 @@
 | m2.2h  | 0xB444-0xB446   | 3B    | Map 4/D3 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB447-0xB449   | 3B    | Map 4/D3 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB44A-0xB44C   | 3B    | Map 4/D3 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m2.2h  | 0xB44D-0xB44D   | 1B    | Map 4/D3 Respawn Count          | 0x00-0x03                  |
+| m2.2h  | 0xB44D-0xB44D   | 1B    | Map 4/D3 Map Width              | (Value + 0x01) Screens     |
 | m2.2h  | 0xB44E-0xB52D   | 224B  | Map 4/D3 Items Block            | 14 items × 16B             |
 | m2.2h  | 0xB52E-0xB52E   | 1B    | Map 4/D3 Separator              | Always 0x00                |
 | m2.2h  | 0xB52F-0xB55E   | 48B   | Map 4/D3 Teleports Block        | 6 teleports × 8B           |
@@ -249,7 +249,7 @@
 | m2.2h  | 0xB58C-0xB58E   | 3B    | Map 1/D4 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB58F-0xB591   | 3B    | Map 1/D4 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB592-0xB594   | 3B    | Map 1/D4 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m2.2h  | 0xB595-0xB595   | 1B    | Map 1/D4 Respawn Count          | 0x00-0x03                  |
+| m2.2h  | 0xB595-0xB595   | 1B    | Map 1/D4 Map Width              | (Value + 0x01) Screens     |
 | m2.2h  | 0xB596-0xB675   | 224B  | Map 1/D4 Items Block            | 14 items × 16B             |
 | m2.2h  | 0xB676-0xB676   | 1B    | Map 1/D4 Separator              | Always 0x00                |
 | m2.2h  | 0xB677-0xB6A6   | 48B   | Map 1/D4 Teleports Block        | 6 teleports × 8B           |
@@ -263,7 +263,7 @@
 | m2.2h  | 0xB6D4-0xB6D6   | 3B    | Map 2/D4 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB6D7-0xB6D9   | 3B    | Map 2/D4 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB6DA-0xB6DC   | 3B    | Map 2/D4 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m2.2h  | 0xB6DD-0xB6DD   | 1B    | Map 2/D4 Respawn Count          | 0x00-0x03                  |
+| m2.2h  | 0xB6DD-0xB6DD   | 1B    | Map 2/D4 Map Width              | (Value + 0x01) Screens     |
 | m2.2h  | 0xB6DE-0xB7BD   | 224B  | Map 2/D4 Items Block            | 14 items × 16B             |
 | m2.2h  | 0xB7BE-0xB7BE   | 1B    | Map 2/D4 Separator              | Always 0x00                |
 | m2.2h  | 0xB7BF-0xB7EE   | 48B   | Map 2/D4 Teleports Block        | 6 teleports × 8B           |
@@ -277,7 +277,7 @@
 | m2.2h  | 0xB81C-0xB81E   | 3B    | Map 3/D4 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB81F-0xB821   | 3B    | Map 3/D4 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB822-0xB824   | 3B    | Map 3/D4 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m2.2h  | 0xB825-0xB825   | 1B    | Map 3/D4 Respawn Count          | 0x00-0x03                  |
+| m2.2h  | 0xB825-0xB825   | 1B    | Map 3/D4 Map Width              | (Value + 0x01) Screens     |
 | m2.2h  | 0xB826-0xB905   | 224B  | Map 3/D4 Items Block            | 14 items × 16B             |
 | m2.2h  | 0xB906-0xB906   | 1B    | Map 3/D4 Separator              | Always 0x00                |
 | m2.2h  | 0xB907-0xB936   | 48B   | Map 3/D4 Teleports Block        | 6 teleports × 8B           |
@@ -291,7 +291,7 @@
 | m2.2h  | 0xB964-0xB966   | 3B    | Map 4/D4 Respawn Point 1        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB967-0xB969   | 3B    | Map 4/D4 Respawn Point 2        | BIG-ENDIAN, YY YY XX       |
 | m2.2h  | 0xB96A-0xB96C   | 3B    | Map 4/D4 Respawn Point 3        | BIG-ENDIAN, YY YY XX       |
-| m2.2h  | 0xB96D-0xB96D   | 1B    | Map 4/D4 Respawn Count          | 0x00-0x03                  |
+| m2.2h  | 0xB96D-0xB96D   | 1B    | Map 4/D4 Map Width              | (Value + 0x01) Screens     |
 | m2.2h  | 0xB96E-0xBA4D   | 224B  | Map 4/D4 Items Block            | 14 items × 16B             |
 | m2.2h  | 0xBA4E-0xBA4E   | 1B    | Map 4/D4 Separator              | Always 0x00                |
 | m2.2h  | 0xBA4F-0xBA7E   | 48B   | Map 4/D4 Teleports Block        | 6 teleports × 8B           |
