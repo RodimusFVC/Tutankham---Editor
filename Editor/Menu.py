@@ -1121,41 +1121,6 @@ def find_door(map_index):
     
     return None
 
-def find_spawners(map_index):
-    """Find all spawner positions on a map - reads directly from ROM cache"""
-    visual_map = load_visual_map_from_cache(map_index)
-    spawners = []
-    
-    # Check each spawner configuration
-    for direction, config in SPAWNER_CONFIGS.items():
-        tiles = config['tiles']
-        h, w = tiles.shape
-        
-        for row in range(map_height - h + 1):
-            for col in range(map_width - w + 1):
-                # Check if this position contains the spawner pattern
-                is_spawner = True
-                for dr in range(h):
-                    for dc in range(w):
-                        expected_tile = tiles[dr, dc]
-                        actual_tile = visual_map[row + dr, col + dc]
-                        if expected_tile != actual_tile:
-                            is_spawner = False
-                            break
-                    if not is_spawner:
-                        break
-                
-                if is_spawner:
-                    spawners.append({
-                        'row': row,
-                        'col': col,
-                        'width': w,
-                        'height': h,
-                        'direction': direction
-                    })
-    
-    return spawners
-
 def find_teleporters(map_index):
     """Find all teleporter columns - reads directly from ROM cache"""
     visual_map = load_visual_map_from_cache(map_index)
@@ -1339,8 +1304,13 @@ def initialize_map_editor_state(window):
     for i in range(num_maps):
         window.door_positions[i] = find_door(i)
 
+    # Find teleporter positions (columns that have teleporters)
+    window.teleporter_positions = {}
+    for i in range(num_maps):
+        window.teleporter_positions[i] = find_teleporters(i)
+
     # Validate and clean up teleporters
-    validate_teleporters(window)    
+    validate_teleporters(window)   
     
     logging.info("Map editor state initialized")
 
@@ -2024,7 +1994,6 @@ def on_map_select(map_idx, window):
     
     # Refresh composite positions for the new map
     window.door_positions[map_idx] = find_door(map_idx)
-    window.spawner_positions[map_idx] = find_spawners(map_idx)
     window.teleporter_positions[map_idx] = find_teleporters(map_idx)
     
     window.tile_images.clear()
@@ -2043,7 +2012,6 @@ def select_map_and_difficulty(map_idx, diff, window):
     
     # Refresh everything
     window.door_positions[map_idx] = find_door(map_idx)
-    window.spawner_positions[map_idx] = find_spawners(map_idx)
     window.teleporter_positions[map_idx] = find_teleporters(map_idx)
     
     window.tile_images.clear()
@@ -3138,14 +3106,22 @@ def update_tile_info(window):
         if window.selected_object_type:
             # Show the marker tile for the selected object type
             marker_tiles = {
-                'Player Respawn': RESPAWN_MARKER_TILE,
-                'Enemy Spawn': ENEMY_SPAWN_MARKER_TILE,
-                'Teleporter': TELEPORTER_MARKER_TILE
+                'respawn': RESPAWN_MARKER_TILE,              # Changed from 'Player Respawn'
+                'enemy_spawn': ENEMY_SPAWN_MARKER_TILE,      # Already correct
+                'teleporter': TELEPORTER_MARKER_TILE         # Already correct
+            }
+            
+            # Friendly display names
+            display_names = {
+                'respawn': 'Player Respawn',
+                'enemy_spawn': 'Enemy Spawn',
+                'teleporter': 'Teleporter'
             }
             
             if window.selected_object_type in marker_tiles:
                 tile_id = marker_tiles[window.selected_object_type]
-                window.tile_info_var.set(f"Selected: {window.selected_object_type}")
+                display_name = display_names.get(window.selected_object_type, window.selected_object_type)
+                window.tile_info_var.set(f"Selected: {display_name}")
                 
                 # Show tile preview
                 if tile_id < len(window.tiles):
