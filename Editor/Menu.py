@@ -2114,7 +2114,12 @@ def on_map_click(event, window):
             render_map_view(window)
             return
         
-        # Handle object marker placement (respawns, enemy spawns, teleporters)
+        # Handle teleporter placement specially (two-phase)
+        if window.selected_object_type == 'teleporter':
+            place_teleporter_step(row, col, window)
+            return
+        
+        # Handle other object markers (respawns, enemy spawns)
         if window.selected_object_type:
             place_object_marker(row, col, window)
             return
@@ -2200,7 +2205,29 @@ def place_object_marker(row, col, window):
             messagebox.showinfo("Player Start", 
                 "Player start cannot be placed - it already exists.\n"
                 "Click on the existing player start marker to drag it to a new location.")
-        
+
+        elif window.selected_object_type == 'enemy_spawn':
+                    # Check if we have room
+                    active_spawns = sum(1 for spawn in objects['spawns'] if spawn['y'] != 0)
+                    if active_spawns >= NUM_SPAWNS:
+                        messagebox.showwarning("Limit Reached", 
+                            f"Maximum {NUM_SPAWNS} enemy spawn points allowed")
+                        return
+                    
+                    # Add enemy spawn
+                    for spawn in objects['spawns']:
+                        if spawn['y'] == 0:  # Empty slot
+                            spawn['x'] = x
+                            spawn['y'] = y
+                            # Write to ROM immediately
+                            save_object_data(objects, window.selected_map, window.difficulty)
+                            break
+                    
+                    mark_modified(window)
+                    window.status_var.set(f"Placed enemy spawn at ({col}, {row})")
+                    render_map_view(window)
+                    update_map_counters(window)
+
     except Exception as e:
         logging.error(f"Error placing object marker: {e}")
 
