@@ -1122,23 +1122,67 @@ def find_door(map_index):
     return None
 
 def find_teleporters(map_index):
-    """Find all teleporter columns - reads directly from ROM cache"""
-    visual_map = load_visual_map_from_cache(map_index)
+    """Find all valid teleporter columns from object data"""
     teleporter_cols = []
+    visual_map = load_visual_map_from_cache(map_index)
+    logical_map = load_logical_map_from_cache(map_index)
     
-    for col in range(map_width):
-        for row in range(map_height):
-            if visual_map[row, col] in [100, 101]:  # Teleporter pillar tiles
-                if col not in teleporter_cols:
-                    teleporter_cols.append(col)
-                break
+    # Check all difficulties for this map
+    for diff in range(NUM_DIFFICULTIES):
+        objects = load_object_data(map_index, diff)
+        for tp in objects['teleports']:
+            if tp['y'] == 0:
+                continue  # Empty slot
+            
+            # Get coordinates
+            center_col = tp['y'] // 0x08
+            bottom_row_from_bottom = tp['bottom_row'] // 0x08
+            top_row_from_bottom = tp['top_row'] // 0x08
+            
+            # Convert to array indices (flip row)
+            bottom_row = (map_height - 1) - bottom_row_from_bottom
+            top_row = (map_height - 1) - top_row_from_bottom
+            
+            # Validate bounds
+            if center_col < 0 or center_col >= map_width:
+                continue
+            if bottom_row < 0 or bottom_row >= map_height:
+                continue
+            if top_row < 0 or top_row >= map_height:
+                continue
+            
+            # Validate different rows
+            if bottom_row == top_row:
+                continue
+            
+            # Validate both endpoints on walkable tiles (visual)
+            if visual_map[bottom_row, center_col] != 0x26:
+                continue
+            if visual_map[top_row, center_col] != 0x26:
+                continue
+            
+            # Validate both endpoints on walkable tiles (logical)
+            logical_row_bottom = center_col
+            logical_col_bottom = bottom_row + 1
+            logical_row_top = center_col
+            logical_col_top = top_row + 1
+            
+            if not np.array_equal(logical_map[logical_row_bottom, logical_col_bottom], [0x00, 0x00]):
+                continue
+            if not np.array_equal(logical_map[logical_row_top, logical_col_top], [0x00, 0x00]):
+                continue
+            
+            # Valid teleporter found
+            if center_col not in teleporter_cols:
+                teleporter_cols.append(center_col)
     
     return teleporter_cols
 
 def validate_teleporters(window):
-    """Remove teleporter entries that don't have valid visual tiles or are invalid"""
+    """Remove teleporter entries that are invalid"""
     for map_idx in range(num_maps):
         visual_map = load_visual_map_from_cache(map_idx)
+        logical_map = load_logical_map_from_cache(map_idx)
         
         # Check all difficulties for this map
         for diff in range(NUM_DIFFICULTIES):
@@ -1147,6 +1191,8 @@ def validate_teleporters(window):
             for tp_idx, tp in enumerate(objects['teleports']):
                 if tp['y'] == 0:
                     continue  # Already empty
+                
+                is_valid = True
                 
                 # Get coordinates
                 center_col = tp['y'] // 0x08
@@ -1160,33 +1206,47 @@ def validate_teleporters(window):
                 # Validate column in bounds
                 if center_col < 0 or center_col >= map_width:
                     logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} column out of bounds, removing")
-                    tp['y'] = 0
-                    tp['top_row'] = 0
-                    tp['bottom_row'] = 0
-                    continue
+                    is_valid = False
                 
                 # Validate rows in bounds
-                if bottom_row < 0 or bottom_row >= map_height or top_row < 0 or top_row >= map_height:
+                if is_valid and (bottom_row < 0 or bottom_row >= map_height or top_row < 0 or top_row >= map_height):
                     logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} rows out of bounds, removing")
-                    tp['y'] = 0
-                    tp['top_row'] = 0
-                    tp['bottom_row'] = 0
-                    continue
+                    is_valid = False
                 
-                # Validate both ends are on walkable tiles (0x26 empty path)
-                if visual_map[bottom_row, center_col] != 0x26:
-                    logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} bottom not on walkable tile, removing")
-                    tp['y'] = 0
-                    tp['top_row'] = 0
-                    tp['bottom_row'] = 0
-                    continue
+                # Validate different rows
+                if is_valid and bottom_row == top_row:
+                    logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} both endpoints on same row, removing")
+                    is_valid = False
                 
-                if visual_map[top_row, center_col] != 0x26:
-                    logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} top not on walkable tile, removing")
+                # Validate both endpoints on walkable tiles (visual 0x26)
+                if is_valid and visual_map[bottom_row, center_col] != 0x26:
+                    logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} bottom not on walkable tile (visual), removing")
+                    is_valid = False
+                
+                if is_valid and visual_map[top_row, center_col] != 0x26:
+                    logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} top not on walkable tile (visual), removing")
+                    is_valid = False
+                
+                # Validate both endpoints on walkable tiles (logical 0x00, 0x00)
+                if is_valid:
+                    logical_row_bottom = center_col
+                    logical_col_bottom = bottom_row + 1
+                    logical_row_top = center_col
+                    logical_col_top = top_row + 1
+                    
+                    if not np.array_equal(logical_map[logical_row_bottom, logical_col_bottom], [0x00, 0x00]):
+                        logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} bottom not on walkable tile (logical), removing")
+                        is_valid = False
+                    
+                    if is_valid and not np.array_equal(logical_map[logical_row_top, logical_col_top], [0x00, 0x00]):
+                        logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} top not on walkable tile (logical), removing")
+                        is_valid = False
+                
+                # Remove if invalid
+                if not is_valid:
                     tp['y'] = 0
                     tp['top_row'] = 0
                     tp['bottom_row'] = 0
-                    continue
             
             # Save cleaned object data back to ROM
             save_object_data(objects, map_idx, diff)
@@ -2263,267 +2323,88 @@ def place_tile(row, col, window):
     except Exception as e:
         logging.error(f"Error placing tile: {e}")
 
-def place_spawner(row, col, window):
-    """Place a spawner on the map - writes directly to ROM cache"""
-    if window.difficulty > 0:
-        messagebox.showwarning("Edit Locked", 
-            "Visual/logical map editing is only allowed in Difficulty 1.")
-        return
-    
-    direction = window.selected_spawner_dir
-    config = SPAWNER_CONFIGS[direction]
-    
-    h, w = config['tiles'].shape
-    if row + h > map_height or col + w > map_width:
-        messagebox.showwarning("Invalid Placement", "Spawner doesn't fit")
-        return
-    
-    # Check for overlaps with other composites
-    for dr in range(h):
-        for dc in range(w):
-            check_row = row + dr
-            check_col = col + dc
-            
-            if is_door_tile(check_row, check_col, window):
-                messagebox.showwarning("Invalid Placement", "Would overlap with door")
-                return
-            
-            teleporter_cols = window.teleporter_positions.get(window.selected_map, [])
-            if check_col in teleporter_cols:
-                messagebox.showwarning("Invalid Placement", "Would overlap with teleporter")
-                return
-    
-    # Place spawner tiles
-    for r in range(h):
-        for c in range(w):
-            tile_id = config['tiles'][r, c]
-            write_visual_tile_to_cache(window.selected_map, row + r, col + c, tile_id)
-            
-            # Place logical bytes
-            logical_row = col + c
-            logical_col = row + r + 1
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, config['logical'][r, c])
-    
-    # Add to object data
-    x_coord = row * 0x08
-    y_coord = col * 0x08
-    
-    objects = window.object_data[window.difficulty][window.selected_map]
-    for spawn in objects['spawns']:
-        if spawn['y'] == 0:
-            spawn['y'] = y_coord
-            spawn['x'] = x_coord
-            
-            # Write to ROM cache immediately
-            save_object_data(objects, window.selected_map, window.difficulty)
-            
-            mark_modified(window)
-            render_map_view(window)
-            update_map_counters(window)
-            window.status_var.set(f"Placed {direction} spawner at ({col}, {row})")
-            
-            # Update spawner positions cache
-            window.spawner_positions[window.selected_map] = find_spawners(window.selected_map)
-            return
-    
-    messagebox.showwarning("No Slots", "No empty spawner slots (max 7)")
-
-def delete_spawner(row, col, window):
-    """Delete a spawner at the given position"""
-    if window.difficulty > 0:
-        messagebox.showwarning("Edit Locked", 
-            "Visual/logical map editing is only allowed in Difficulty 1.")
-        return
-    
-    # Find which spawner this tile belongs to
-    spawner = None
-    for s in window.spawner_positions.get(window.selected_map, []):
-        if (s['row'] <= row < s['row'] + s['height'] and 
-            s['col'] <= col < s['col'] + s['width']):
-            spawner = s
-            break
-    
-    if not spawner:
-        return
-    
-    # Clear the spawner tiles
-    for dr in range(spawner['height']):
-        for dc in range(spawner['width']):
-            write_visual_tile_to_cache(window.selected_map, 
-                                       spawner['row'] + dr, 
-                                       spawner['col'] + dc, 
-                                       empty_path_tile)
-            
-            logical_row = spawner['col'] + dc
-            logical_col = spawner['row'] + dr + 1
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x00, 0x00])
-    
-    # Remove from object data
-    x = spawner['row'] * 0x08
-    y = spawner['col'] * 0x08
-    objects = window.object_data[window.difficulty][window.selected_map]
-    for spawn in objects['spawns']:
-        if spawn['x'] == x and spawn['y'] == y:
-            spawn['x'] = 0
-            spawn['y'] = 0
-            
-            # Write to ROM cache immediately
-            save_object_data(objects, window.selected_map, window.difficulty)
-            break
-    
-    mark_modified(window)
-    render_map_view(window)
-    update_map_counters(window)
-    window.status_var.set(f"Deleted {spawner['direction']} spawner")
-    
-    # Update spawner positions cache
-    window.spawner_positions[window.selected_map] = find_spawners(window.selected_map)
-
 def place_teleporter_step(row, col, window):
-    """Two-phase teleporter placement - writes directly to ROM cache"""
+    """Two-phase teleporter placement - stores endpoints as objects only"""
     if window.difficulty > 0:
         messagebox.showwarning("Edit Locked", 
-            "Visual/logical map editing is only allowed in Difficulty 1.")
+            "Object placement is only allowed in Difficulty 1.")
         return
+    
+    # Convert to game coordinates
+    row_from_bottom = (map_height - 1) - row
+    x = row_from_bottom * 0x08
+    y = col * 0x08
+    
+    objects = window.object_data[window.difficulty][window.selected_map]
     
     if window.teleporter_first_pos is None:
-        # First click - place first horizontal pillar
-        if col - 1 < 0 or col + 1 >= map_width:
-            messagebox.showwarning("Invalid Placement", 
-                "Teleporter must have space for 3 columns (center ±1)")
-            return
-        
-        # Check if these columns already have a teleporter
-        left_col = col - 1
-        right_col = col + 1
-        teleporter_cols = window.teleporter_positions.get(window.selected_map, [])
-        for check_col in [left_col, col, right_col]:
-            if check_col in teleporter_cols:
+        # First click - store first endpoint
+        # Check if this column already has a teleporter
+        for tp in objects['teleports']:
+            if tp['y'] == y:
                 messagebox.showwarning("Invalid Placement", 
-                    f"Column {check_col} already has a teleporter")
+                    f"Column {col} already has a teleporter")
                 return
         
-        # Place first horizontal pillar across 3 columns at this row
-        pillar_pattern = [100, 38, 101]
-        pillar_logical = [[0x55, 0x55], [0x00, 0x00], [0x55, 0x55]]
-        
-        for dc, tile_col in enumerate([left_col, col, right_col]):
-            write_visual_tile_to_cache(window.selected_map, row, tile_col, pillar_pattern[dc])
-            
-            logical_row = tile_col
-            logical_col = row + 1
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, pillar_logical[dc])
-        
-        window.teleporter_first_pos = (row, col)  # Store row and center column
+        window.teleporter_first_pos = (row, col, x, y)  # Store row, col, and game coords
         mark_modified(window)
-        render_map_view(window)
+        render_map_view(window)  # Show first endpoint overlay
         window.status_var.set(
-            f"First pillar at row {row}, columns {left_col}-{right_col}. "
-            f"Place second in SAME COLUMNS, different row (ESC to cancel)")
+            f"First teleporter endpoint at (R{row}, C{col}). "
+            f"Place second endpoint in SAME COLUMN (ESC to cancel)")
     
     else:
-        # Second click - must be same center column, different row
-        first_row, first_col = window.teleporter_first_pos
+        # Second click - must be same column, different row
+        first_row, first_col, first_x, first_y = window.teleporter_first_pos
         
         if col != first_col:
             messagebox.showwarning("Invalid Placement", 
-                f"Second pillar must be at column {first_col} (same center column as first)")
+                f"Second endpoint must be in column {first_col} (same as first)")
             return
         
         if row == first_row:
             messagebox.showwarning("Invalid Placement", 
-                "Second pillar must be at a different row")
+                "Second endpoint must be at a different row")
             return
         
-        if col - 1 < 0 or col + 1 >= map_width:
-            messagebox.showwarning("Invalid Placement", "Teleporter doesn't fit")
-            return
-        
-        # Place second horizontal pillar
-        left_col = col - 1
-        right_col = col + 1
-        pillar_pattern = [100, 38, 101]
-        pillar_logical = [[0x55, 0x55], [0x00, 0x00], [0x55, 0x55]]
-        
-        for dc, tile_col in enumerate([left_col, col, right_col]):
-            write_visual_tile_to_cache(window.selected_map, row, tile_col, pillar_pattern[dc])
-            
-            logical_row = tile_col
-            logical_col = row + 1
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, pillar_logical[dc])
-        
-        # Calculate object data
-        y_coord = col * 0x08  # Center column
-        
-        # Convert rows to coordinates (from bottom)
-        row_from_bottom_1 = (map_height - 1) - first_row
-        row_from_bottom_2 = (map_height - 1) - row
-        
-        row_coord_1 = row_from_bottom_1 * 0x08
-        row_coord_2 = row_from_bottom_2 * 0x08
-        
-        # Determine which is bottom (lower row number) and top (higher row number)
-        bottom_row_coord = min(row_coord_1, row_coord_2)
-        top_row_coord = max(row_coord_1, row_coord_2)
+        # Determine which is bottom and top
+        bottom_x = min(first_x, x)
+        top_x = max(first_x, x)
         
         # Add to object data
-        objects = window.object_data[window.difficulty][window.selected_map]
         for tp in objects['teleports']:
-            if tp['y'] == 0:
-                tp['y'] = y_coord
-                tp['bottom_row'] = bottom_row_coord
-                tp['top_row'] = top_row_coord
+            if tp['y'] == 0:  # Empty slot
+                tp['y'] = y  # Column coordinate (same for both endpoints)
+                tp['bottom_row'] = bottom_x
+                tp['top_row'] = top_x
                 
-                # Write to ROM cache immediately
+                # Write to ROM immediately
                 save_object_data(objects, window.selected_map, window.difficulty)
-                
-                # Update teleporter positions cache
-                if window.selected_map not in window.teleporter_positions:
-                    window.teleporter_positions[window.selected_map] = []
-                if col not in window.teleporter_positions[window.selected_map]:
-                    window.teleporter_positions[window.selected_map].append(col)
                 
                 mark_modified(window)
                 render_map_view(window)
                 update_map_counters(window)
                 window.status_var.set(
-                    f"Placed teleporter pair at column {col}, rows {first_row} and {row}")
+                    f"Placed teleporter pair in column {col}, rows {first_row} and {row}")
                 window.teleporter_first_pos = None
                 return
         
-        messagebox.showwarning("No Slots", "No empty teleporter slots (max 6)")
+        # No empty slots
+        messagebox.showwarning("Limit Reached", 
+            f"Maximum {NUM_TELEPORTS} teleporter pairs allowed")
         window.teleporter_first_pos = None
 
 def delete_teleporter(col, window):
     """Delete a teleporter pair in the given column"""
     if window.difficulty > 0:
         messagebox.showwarning("Edit Locked", 
-            "Visual/logical map editing is only allowed in Difficulty 1.")
+            "Object deletion is only allowed in Difficulty 1.")
         return
     
-    teleporter_cols = window.teleporter_positions.get(window.selected_map, [])
-    if col not in teleporter_cols:
-        return
-    
-    # Clear all teleporter tiles in this column and adjacent columns
-    left_col = col - 1
-    right_col = col + 1
-    
-    if left_col < 0 or right_col >= map_width:
-        return
-    
-    for row in range(map_height):
-        for check_col in [left_col, col, right_col]:
-            tile_id = load_visual_map_from_cache(window.selected_map)[row, check_col]
-            if tile_id in [100, 38, 101]:  # Teleporter tiles
-                write_visual_tile_to_cache(window.selected_map, row, check_col, empty_path_tile)
-                
-                logical_row = check_col
-                logical_col = row + 1
-                write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x00, 0x00])
+    # Convert column to game coordinate
+    y_coord = col * 0x08
     
     # Remove from object data
-    y_coord = col * 0x08
     objects = window.object_data[window.difficulty][window.selected_map]
     for tp in objects['teleports']:
         if tp['y'] == y_coord:
@@ -2534,9 +2415,6 @@ def delete_teleporter(col, window):
             # Write to ROM cache immediately
             save_object_data(objects, window.selected_map, window.difficulty)
             break
-    
-    # Remove from teleporter positions cache
-    window.teleporter_positions[window.selected_map].remove(col)
     
     mark_modified(window)
     render_map_view(window)
