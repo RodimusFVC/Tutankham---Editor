@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v0.20"	# Editor Version Number
+EDITOR_VERSION = "v0.19"	# Editor Version Number
 open_windows = {			# Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -114,34 +114,26 @@ NUM_RESPAWNS       = 3       # Max Number Of Player Respawn Points
 HIGH_SCORE_OFFSET  = 0x04A0  # Offset for high score data in m1.1h
 HIGH_STAGE_OFFSET  = HIGH_SCORE_OFFSET + 0x2D
 NUM_HIGH_SCORES    = 7       # 7 high score entries
-# Tile Palette Categories
-PATH_TILES = [0x26]          # Empty Path Tile
-WALL_TILES = [0x00, 0x01,    # Wall Tiles
-              0x02, 0x03, 
-              0x04, 0x05, 
-              0x06, 0x07, 
-              0x08, 0x09, 
-              0x0A, 0x0B, 
-              0x0C, 0x0D, 
-              0x0E, 0x11, 
-              0x13, 0x1F, 
-              0x20, 0x27, 
-              0x28]
-SPAWNER_TILES = [0x0F,      # All spawner decoration pieces
-              0x10, 0x12, 
-              0x14, 0x15, 
-              0x18, 0x1B, 
-              0x1D]
-TELEPORTER_TILES = [
-              0x64, 0x65]   # Left and Right Pillars
+# Tile filter categories
+PATH_TILES     = [0x26]      # Blank Path - Where Player/Monsters Can Move Freely
+SPAWN_TILES    = [0x17,]     # 23 - Player Respawn flame (Editor Representation Only!  Not Saved To Map/Code)
+WALL_TILES     = [
+    *range(0x00, 0x0F), 
+    0x11, 0x13, 
+    *range(0x1F, 0x21), 
+    0x27, 0x28,]             # Walls
 TREASURE_TILES = [
-              0x4A, 0x62,   # Crown box (empty, filled)
-              0x21, 0x6F,   # Ring box (empty, filled)
-              0x22, 0x70,   # Key box (empty, filled)
-              0x72]         # Keyhole
-SPAWN_MARKER_TILES = [0x29, # Player start (drag-only, not in palette)
-              0x17]         # Respawn flame
+    0x21, 0x6F,              # Ring Box     (Empty, Filled)
+    0x22, 0x70,              # Key Box      (Empty, Filled)
+    0x4A, 0x62,              # Crown Box    (Empty, Filled)
+    0x72,]                   # Keyhole
 # Composite block definitions
+TELEPORTER_TILES = np.array([
+   [100], [38], [101]])      # Left Pillar, Blank Space, Right Pillar
+TELEPORTER_LOGICAL = np.array([
+  [[0x55,0x55]],             # Wall Block
+  [[0x00,0x00]],             # Empty Block
+  [[0x55,0x55]]])            # Wall Block
 DOOR_TILES = np.array([
    [115, 116, 117],          # Door Top Tiles
    [118, 119, 120],          # Door Middle Tiles
@@ -156,26 +148,48 @@ DOOR_LOGICAL = np.array([
   [[0x00,0x00],              # Door Bottom Left Logical Bytes
    [0xF0,0x66],              # Door Bottom Middle Logical Bytes
    [0xF0,0x00]]])            # Door Bottom Right Logical Bytes
+SPAWNER_CONFIGS = {
+    'right': {
+        'tiles': np.array([[29, 15], [27, 38], [24, 21]]),
+        'logical': np.array([[[0x55,0x55], [0x55,0x55]],
+                            [[0x55,0x55], [0x00,0x00]],
+                            [[0x55,0x55], [0x55,0x55]]])
+    },
+    'left': {
+        'tiles': np.array([[15, 16], [38, 18], [21, 20]]),
+        'logical': np.array([[[0x55,0x55], [0x55,0x55]],
+                            [[0x00,0x00], [0x55,0x55]],
+                            [[0x55,0x55], [0x55,0x55]]])
+    },
+    'up': {
+        'tiles': np.array([[27, 38, 18], [24, 21, 20]]),
+        'logical': np.array([[[0x55,0x55], [0x00,0x00], [0x55,0x55]],
+                            [[0x55,0x55], [0x55,0x55], [0x55,0x55]]])
+    },
+    'down': {
+        'tiles': np.array([[29, 15, 16], [27, 38, 18]]),
+        'logical': np.array([[[0x55,0x55], [0x55,0x55], [0x55,0x55]],
+                            [[0x55,0x55], [0x00,0x00], [0x55,0x55]]])
+    }
+}
+
 # Item tile constraints
 ITEM_TILES = {
+    0x70: 0x22,  # Key -> side-accessible box
     0x62: 0x4A,  # Crown -> bottom-accessible box
     0x6F: 0x21,  # Ring -> top-accessible box
-    0x70: 0x22,  # Key -> side-accessible box
     0x72: None   # Keyhole -> no constraint
 }
+
 # Empty to filled box mapping
 EMPTY_TO_FILLED = {
+    0x22: 0x70,  # Key box
     0x4A: 0x62,  # Crown box
     0x21: 0x6F,  # Ring box
-    0x22: 0x70,  # Key box
 }
+
 FILLED_TO_EMPTY = {v: k for k, v in EMPTY_TO_FILLED.items()}
 
-# Overlay Tile Selections
-PLAYER_START_MARKER_TILE = 0x29    # Forward-facing player sprite
-RESPAWN_MARKER_TILE      = 0x6E    # Flame sprite
-ENEMY_SPAWN_MARKER_TILE  = 0x17    # Poof cloud sprite (or whatever you prefer)
-TELEPORTER_MARKER_TILE   = 0x63    # Pillar sprite (or whatever you prefer)
 # Tile names for display (0x00 - 0x9F, 160 tiles total)
 TILE_NAMES = {
     # Empty Path
@@ -1171,7 +1185,7 @@ def find_teleporters(map_index):
     return teleporter_cols
 
 def validate_teleporters(window):
-    """Remove teleporter entries that don't have valid visual tiles or are invalid"""
+    """Remove teleporter entries that don't have matching visual tiles"""
     for map_idx in range(num_maps):
         visual_map = load_visual_map_from_cache(map_idx)
         
@@ -1183,48 +1197,57 @@ def validate_teleporters(window):
                 if tp['y'] == 0:
                     continue  # Already empty
                 
-                # Get coordinates
+                # Center column
                 center_col = tp['y'] // 0x08
-                bottom_row_from_bottom = tp['bottom_row'] // 0x08
-                top_row_from_bottom = tp['top_row'] // 0x08
                 
-                # Convert to array indices (flip row)
-                bottom_row = (map_height - 1) - bottom_row_from_bottom
-                top_row = (map_height - 1) - top_row_from_bottom
+                # Columns span: center-1, center, center+1
+                left_col = (tp['y'] - 0x08) // 0x08
+                right_col = (tp['y'] + 0x08) // 0x08
                 
-                # Validate column in bounds
-                if center_col < 0 or center_col >= map_width:
-                    logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} column out of bounds, removing")
+                # Rows
+                bottom_row = tp['bottom_row'] // 0x08
+                top_row = tp['top_row'] // 0x08
+                
+                # Skip if columns are out of bounds
+                if left_col < 0 or right_col >= map_width:
                     tp['y'] = 0
                     tp['top_row'] = 0
                     tp['bottom_row'] = 0
                     continue
                 
-                # Validate rows in bounds
-                if bottom_row < 0 or bottom_row >= map_height or top_row < 0 or top_row >= map_height:
-                    logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} rows out of bounds, removing")
-                    tp['y'] = 0
-                    tp['top_row'] = 0
-                    tp['bottom_row'] = 0
-                    continue
+                # Expected pattern across columns: [100, 38, 101]
+                expected_pattern = [100, 38, 101]
+                columns = [left_col, center_col, right_col]
                 
-                # Validate both ends are on walkable tiles (0x26 empty path)
-                if visual_map[bottom_row, center_col] != 0x26:
-                    logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} bottom not on walkable tile, removing")
-                    tp['y'] = 0
-                    tp['top_row'] = 0
-                    tp['bottom_row'] = 0
-                    continue
+                valid = True
                 
-                if visual_map[top_row, center_col] != 0x26:
-                    logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} top not on walkable tile, removing")
+                # Check bottom pillar
+                bottom_row_flipped = (map_height - 1) - bottom_row
+                if bottom_row_flipped < 0 or bottom_row_flipped >= map_height:
+                    valid = False
+                else:
+                    for i, col in enumerate(columns):
+                        actual_tile = visual_map[bottom_row_flipped, col]
+                        expected_tile = expected_pattern[i]
+                        if actual_tile != expected_tile:
+                            valid = False
+                
+                # Check top pillar
+                if valid:
+                    top_row_flipped = (map_height - 1) - top_row
+                    if top_row_flipped < 0 or top_row_flipped >= map_height:
+                        valid = False
+                    else:
+                        for i, col in enumerate(columns):
+                            actual_tile = visual_map[top_row_flipped, col]
+                            expected_tile = expected_pattern[i]
+                            if actual_tile != expected_tile:
+                                valid = False
+                
+                if not valid:
                     tp['y'] = 0
                     tp['top_row'] = 0
                     tp['bottom_row'] = 0
-                    continue
-            
-            # Save cleaned object data back to ROM
-            save_object_data(objects, map_idx, diff)
 
 def place_spawn_visualization_tiles(window):
     """Place spawn tiles in visual maps based on object data - writes directly to ROM cache"""
@@ -1288,16 +1311,18 @@ def initialize_map_editor_state(window):
     window.selected_map = 0
     window.selected_tile = 0
     window.difficulty = 0
-    window.selected_object_type = None  # For placing items/respawns
-    
+    window.selected_object_type   = None  # 'spawner', 'teleporter', 'player_start', etc.
+    window.selected_composite     = None  # Track composite object selection
+    window.selected_spawner_dir   = None  # Track spawner direction
+
     # Object placement state
-    window.teleporter_first_pos = None
-    window.dragging_object = None
-    window.drag_ghost_pos = None
-    window.selected_door = None
-    window.door_drag_start = None
-    window.door_ghost_pos = None
-    window.selected_player_start = None
+    window.teleporter_first_pos   = None
+    window.dragging_object        = None
+    window.drag_ghost_pos         = None
+    window.selected_door          = None
+    window.door_drag_start        = None
+    window.door_ghost_pos         = None
+    window.selected_player_start  = None
     window.player_start_ghost_pos = None
     
     # Display settings
@@ -1334,13 +1359,23 @@ def initialize_map_editor_state(window):
         for map_idx in range(num_maps):
             window.map_config[diff][map_idx] = load_map_config(map_idx, diff)
     
-    # Find door positions (only composite object we keep)
+    # Validate and fix invalid teleporters
+    validate_teleporters(window)
+    
+    # Place spawn tiles in visual maps (use difficulty 0 as reference)
+    place_spawn_visualization_tiles(window)
+    
+    # Find composite objects
     window.door_positions = {}
+    window.spawner_positions = {}
+    window.teleporter_positions = {}
     for i in range(num_maps):
         window.door_positions[i] = find_door(i)
-
-    # Validate and clean up teleporters
-    validate_teleporters(window)    
+        window.spawner_positions[i] = find_spawners(i)
+        window.teleporter_positions[i] = find_teleporters(i)
+    
+    # Validate filled boxes
+    validate_filled_boxes(window)
     
     logging.info("Map editor state initialized")
 
@@ -1927,36 +1962,19 @@ def build_left_panel(window):
     window.counter_frame = ttk.Frame(window.left_panel)
     window.counter_frame.pack(fill=tk.X, padx=5)
     
-    # Color-coded counters matching overlay colors
-    window.player_start_label = tk.Label(window.counter_frame, text="Player Start: ✓", 
-                                         fg='lime', bg='#f0f0f0', anchor='w',
-                                         font=('Arial', 9))
-    window.player_start_label.pack(fill=tk.X, pady=1)
+    window.items_label = ttk.Label(window.counter_frame, text="Items: 0/14")
+    window.items_label.pack(anchor=tk.W)
+    window.teleports_label = ttk.Label(window.counter_frame, text="Teleports: 0/6")
+    window.teleports_label.pack(anchor=tk.W)
+    window.spawners_label = ttk.Label(window.counter_frame, text="Spawners: 0/7")
+    window.spawners_label.pack(anchor=tk.W)
+    window.respawns_label = ttk.Label(window.counter_frame, text="Respawns: 0/3")
+    window.respawns_label.pack(anchor=tk.W)
     
-    window.respawns_label = tk.Label(window.counter_frame, text="Respawns: 0/3", 
-                                     fg='orange', bg='#f0f0f0', anchor='w',
-                                     font=('Arial', 9))
-    window.respawns_label.pack(fill=tk.X, pady=1)
-    
-    window.spawners_label = tk.Label(window.counter_frame, text="Enemy Spawns: 0/7", 
-                                     fg='red', bg='#f0f0f0', anchor='w',
-                                     font=('Arial', 9))
-    window.spawners_label.pack(fill=tk.X, pady=1)
-    
-    window.teleports_label = tk.Label(window.counter_frame, text="Teleports: 0/6", 
-                                      fg='magenta', bg='#f0f0f0', anchor='w',
-                                      font=('Arial', 9))
-    window.teleports_label.pack(fill=tk.X, pady=1)
-    
-    window.items_label = tk.Label(window.counter_frame, text="Items: 0/14", 
-                                  fg='green', bg='#f0f0f0', anchor='w',
-                                  font=('Arial', 9))
-    window.items_label.pack(fill=tk.X, pady=1)
-    
-    window.validation_label = tk.Label(window.counter_frame, text="", 
-                                       fg='red', bg='#f0f0f0',
-                                       font=('Arial', 8, 'bold'), anchor='w')
-    window.validation_label.pack(fill=tk.X, pady=5)
+    window.validation_label = ttk.Label(window.counter_frame, text="", 
+                                       foreground="red",
+                                       font=('Arial', 8, 'bold'))
+    window.validation_label.pack(anchor=tk.W, pady=5)
     
     ttk.Separator(window.left_panel, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
     
@@ -2146,7 +2164,22 @@ def on_map_click(event, window):
             render_map_view(window)
             return
         
-        # Handle object marker placement (respawns, enemy spawns, teleporters)
+        # Check if clicking on spawner
+        spawner = is_spawner_tile(row, col, window)
+        if spawner:
+            messagebox.showinfo("Spawner", 
+                f"This is a {spawner['direction']} spawner. Right-click to delete.")
+            return
+        
+        # Handle composite object placement
+        if window.selected_composite:
+            if window.selected_composite == 'teleporter':
+                place_teleporter_step(row, col, window)
+            elif window.selected_composite.startswith('spawner_'):
+                place_spawner(row, col, window)
+            return
+        
+        # Handle object marker placement
         if window.selected_object_type:
             place_object_marker(row, col, window)
             return
@@ -2167,6 +2200,15 @@ def is_door_tile(row, col, window):
     door_row, door_col = door_pos
     return (door_row <= row < door_row + 3 and 
             door_col <= col < door_col + 3)
+
+def is_spawner_tile(row, col, window):
+    """Check if a tile position is part of a spawner"""
+    spawners = window.spawner_positions.get(window.selected_map, [])
+    for spawner in spawners:
+        if (spawner['row'] <= row < spawner['row'] + spawner['height'] and 
+            spawner['col'] <= col < spawner['col'] + spawner['width']):
+            return spawner
+    return None
 
 def clear_door(row, col, window):
     """Clear door from position - writes directly to ROM cache"""
@@ -2633,8 +2675,20 @@ def on_map_right_click(event, window):
         if not (0 <= row < map_height and 0 <= col < map_width):
             return
         
-        # Convert to game coordinates
-        row_from_bottom = (map_height - 1) - row
+        # Check if clicking on spawner
+        spawner = is_spawner_tile(row, col, window)
+        if spawner:
+            delete_spawner(row, col, window)
+            return
+        
+        # Check if clicking on teleporter column
+        teleporter_cols = window.teleporter_positions.get(window.selected_map, [])
+        if col in teleporter_cols:
+            delete_teleporter(col, window)
+            return
+        
+        # Convert to game coordinates (with proper flip)
+        row_from_bottom = (map_height - 1) - row  # Flip row
         x = row_from_bottom * 0x08
         y = col * 0x08
         
@@ -2644,6 +2698,7 @@ def on_map_right_click(event, window):
         for item in objects['items']:
             if item['active'] and item['x'] == x and item['y'] == y:
                 item['active'] = False
+                # Write to ROM cache immediately
                 save_object_data(objects, window.selected_map, window.difficulty)
                 mark_modified(window)
                 window.status_var.set(f"Deleted item at ({col}, {row})")
@@ -2659,6 +2714,7 @@ def on_map_right_click(event, window):
                     objects['respawns'][j] = objects['respawns'][j + 1].copy()
                 objects['respawns'][-1] = {'x': 0, 'y': 0}
                 objects['respawn_count'] = max(0, objects['respawn_count'] - 1)
+                # Write to ROM cache immediately
                 save_object_data(objects, window.selected_map, window.difficulty)
                 mark_modified(window)
                 window.status_var.set(f"Deleted respawn point at ({col}, {row})")
@@ -2666,27 +2722,15 @@ def on_map_right_click(event, window):
                 update_map_counters(window)
                 return
         
-        # Check for enemy spawns
+        # Check for spawners (object data)
         for spawn in objects['spawns']:
             if spawn['x'] == x and spawn['y'] == y:
                 spawn['x'] = 0
                 spawn['y'] = 0
+                # Write to ROM cache immediately
                 save_object_data(objects, window.selected_map, window.difficulty)
                 mark_modified(window)
-                window.status_var.set(f"Deleted enemy spawn at ({col}, {row})")
-                render_map_view(window)
-                update_map_counters(window)
-                return
-        
-        # Check for teleporters
-        for tp in objects['teleports']:
-            if tp['y'] == y and (tp['top_row'] == x or tp['bottom_row'] == x):
-                tp['y'] = 0
-                tp['top_row'] = 0
-                tp['bottom_row'] = 0
-                save_object_data(objects, window.selected_map, window.difficulty)
-                mark_modified(window)
-                window.status_var.set(f"Deleted teleporter at ({col}, {row})")
+                window.status_var.set(f"Deleted spawner at ({col}, {row})")
                 render_map_view(window)
                 update_map_counters(window)
                 return
@@ -2701,11 +2745,25 @@ def on_map_right_click(event, window):
 
 def on_escape_key(event, window):
     """Handle escape key"""
-    # Cancel teleporter placement (two-phase)
-    if hasattr(window, 'teleporter_first_pos') and window.teleporter_first_pos is not None:
+    # Cancel teleporter placement
+    if window.teleporter_first_pos is not None:
+        # Restore the original tiles where we placed the first pillar
+        first_row, first_col = window.teleporter_first_pos
+        
+        left_col = first_col - 1
+        right_col = first_col + 1
+        
+        # Clear the pillar tiles back to empty path
+        for tile_col in [left_col, first_col, right_col]:
+            write_visual_tile_to_cache(window.selected_map, first_row, tile_col, empty_path_tile)
+            
+            logical_row = tile_col
+            logical_col = first_row + 1
+            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x00, 0x00])
+        
         window.teleporter_first_pos = None
+        render_map_view(window)
         window.status_var.set("Teleporter placement cancelled")
-        update_tile_info(window)
     
     # Cancel door drag
     elif window.selected_door is not None:
@@ -2721,12 +2779,6 @@ def on_escape_key(event, window):
         window.player_start_ghost_pos = None
         render_map_view(window)
         window.status_var.set("Player start movement cancelled")
-    
-    # Clear object type selection
-    elif window.selected_object_type is not None:
-        window.selected_object_type = None
-        window.status_var.set("Object placement cancelled")
-        update_tile_info(window)
 
 def on_composite_click(composite_id, window):
     """Handle clicking a composite object in the palette"""
@@ -2780,11 +2832,11 @@ def render_map_view(window):
         window.map_canvas.create_image(0, 0, image=map_image_tk, anchor='nw')
         window.map_canvas.image = map_image_tk
         
-        # Draw object overlays if enabled (AFTER base map)
+        # Draw object overlays if enabled
         if window.show_objects.get():
             draw_objects_overlay(window)
         
-        # Draw grid if enabled (LAST, on top of everything)
+        # Draw grid if enabled
         if window.show_grid.get():
             for x in range(0, int(map_width * 16 * window.zoom_level), int(16 * window.zoom_level)):
                 window.map_canvas.create_line(x, 0, x, int(map_height * 16 * window.zoom_level), 
@@ -2822,230 +2874,284 @@ def render_map_view(window):
         logging.error(f"Error rendering map: {e}")
 
 def draw_objects_overlay(window):
-    """Draw object overlays on the map using actual tile sprites"""
-    if not window.show_objects.get():
-        return
-    
+    """Draw object overlays on the map"""
     objects = window.object_data[window.difficulty][window.selected_map]
-    palette = window.palettes[window.selected_map]
     
     # Clear existing overlay images
     window._overlay_images.clear()
     
-    # Helper function to draw a tile sprite with colored outline
-    def draw_sprite_overlay(tile_id, row, col, outline_color, alpha=200):
-        if tile_id >= len(window.tiles):
-            return
-        
-        x = col * 16 * window.zoom_level
-        y = row * 16 * window.zoom_level
-        
-        # Get tile and apply palette
-        tile = window.tiles[tile_id]
-        color_tile = apply_palette_to_tile(tile, palette)
-        
-        # Scale to current zoom
-        scale = int(window.zoom_level)
-        color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
-        tile_rgb = color_tile_large[:, :, :3]
-        
-        # Convert to PIL image with transparency
-        tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGBA')
-        tile_img.putalpha(alpha)
-        tile_photo = ImageTk.PhotoImage(tile_img)
-        
-        # Store reference
-        window._overlay_images.append(tile_photo)
-        
-        # Draw sprite
-        window.map_canvas.create_image(x, y, image=tile_photo, anchor='nw', tags='object_overlay')
-        
-        # Draw colored outline
-        size = 16 * scale
-        window.map_canvas.create_rectangle(x, y, x+size, y+size,
-                                         outline=outline_color, width=2, tags='object_overlay')
-    
-    # Player start (lime outline, 0x29 sprite)
+    # Player start
     ps = objects['player_start']
     if ps['y'] != 0:
         col = ps['y'] // 0x08
         row_from_bottom = ps['x'] // 0x08
         row = (map_height - 1) - row_from_bottom
-        if 0 <= row < map_height and 0 <= col < map_width:
-            draw_sprite_overlay(PLAYER_START_MARKER_TILE, row, col, 'lime', alpha=220)
+        x = col * 16 * window.zoom_level
+        y = row * 16 * window.zoom_level
+        size = 16 * window.zoom_level
+        
+        window.map_canvas.create_rectangle(x, y, x+size, y+size,
+                                         outline='lime', width=3, tags='object_overlay')
     
-    # Respawns (orange outline, 0x17 flame sprite)
+    # Respawns
     for i in range(objects['respawn_count']):
         respawn = objects['respawns'][i]
         if respawn['y'] != 0:
             col = respawn['y'] // 0x08
             row_from_bottom = respawn['x'] // 0x08
             row = (map_height - 1) - row_from_bottom
-            if 0 <= row < map_height and 0 <= col < map_width:
-                draw_sprite_overlay(RESPAWN_MARKER_TILE, row, col, 'orange', alpha=220)
+            x = col * 16 * window.zoom_level
+            y = row * 16 * window.zoom_level
+            size = 16 * window.zoom_level
+            
+            window.map_canvas.create_oval(x, y, x+size, y+size,
+                                         outline='yellow', width=2, tags='object_overlay')
     
-    # Enemy spawn points (red outline, 0x56 poof cloud sprite)
-    for spawn in objects['spawns']:
-        if spawn['y'] != 0:
-            col = spawn['y'] // 0x08
-            row_from_bottom = spawn['x'] // 0x08
-            row = (map_height - 1) - row_from_bottom
-            if 0 <= row < map_height and 0 <= col < map_width:
-                draw_sprite_overlay(ENEMY_SPAWN_MARKER_TILE, row, col, 'red', alpha=200)
-    
-    # Items (colored outlines with appropriate sprites)
+    # Items
     for item in objects['items']:
         if item['active']:
             col = item['y'] // 0x08
             row_from_bottom = item['x'] // 0x08
             row = (map_height - 1) - row_from_bottom
-            if 0 <= row < map_height and 0 <= col < map_width:
-                tile_id = item['tile_id']
-                # Keys: 0x70 (green), Treasures: 0x62 (green), Rings: 0x6F (green), Keyholes: 0x72 (purple)
-                if tile_id == 0x72:  # Keyhole gets purple outline
-                    draw_sprite_overlay(tile_id, row, col, 'purple', alpha=200)
-                else:  # Keys, treasures, rings get green outline
-                    draw_sprite_overlay(tile_id, row, col, 'green', alpha=200)
+            x = col * 16 * window.zoom_level
+            y = row * 16 * window.zoom_level
+            size = 16 * window.zoom_level
+            
+            window.map_canvas.create_rectangle(x, y, x+size, y+size,
+                                             outline='green', width=3, tags='object_overlay')
+            
+            # Draw filled box overlay if applicable
+            if item['tile_id'] in FILLED_TO_EMPTY:
+                tile_idx = item['tile_id']
+                if tile_idx < len(window.tiles):  # Use window-local tiles
+                    tile = window.tiles[tile_idx]
+                    palette = window.palettes[window.selected_map]  # Use window-local palette
+                    color_tile = apply_palette_to_tile(tile, palette)
+                    
+                    scale = int(window.zoom_level)
+                    color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+                    tile_rgb = color_tile_large[:, :, :3]
+                    
+                    tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+                    tile_img.putalpha(180)
+                    tile_photo = ImageTk.PhotoImage(tile_img)
+                    
+                    window._overlay_images.append(tile_photo)
+                    
+                    window.map_canvas.create_image(x, y, image=tile_photo, anchor='nw',
+                                                  tags='object_overlay')
     
-    # Teleporters (magenta line connecting pairs, small pillar icons)
+    # Teleporters
     for tp in objects['teleports']:
         if tp['y'] != 0:
             col = tp['y'] // 0x08
-            row_from_bottom_top = tp['top_row'] // 0x08
-            row_top = (map_height - 1) - row_from_bottom_top
-            row_from_bottom_bot = tp['bottom_row'] // 0x08
-            row_bottom = (map_height - 1) - row_from_bottom_bot
+            row_from_bottom = tp['top_row'] // 0x08
+            row_top = (map_height - 1) - row_from_bottom
+            row_from_bottom = tp['bottom_row'] // 0x08
+            row_bottom = (map_height - 1) - row_from_bottom
             
-            if 0 <= col < map_width:
-                # Draw pillar icons at both ends
-                if 0 <= row_top < map_height:
-                    draw_sprite_overlay(TELEPORTER_MARKER_TILE, row_top, col, 'magenta', alpha=180)
-                if 0 <= row_bottom < map_height:
-                    draw_sprite_overlay(TELEPORTER_MARKER_TILE, row_bottom, col, 'magenta', alpha=180)
-                
-                # Draw connecting line
-                x = col * 16 * window.zoom_level + 8 * window.zoom_level
-                y_top = row_top * 16 * window.zoom_level + 8 * window.zoom_level
-                y_bottom = row_bottom * 16 * window.zoom_level + 8 * window.zoom_level
-                window.map_canvas.create_line(x, y_top, x, y_bottom,
-                                            fill='magenta', width=2, dash=(4, 4), 
-                                            tags='object_overlay')
+            x = col * 16 * window.zoom_level
+            y_top = row_top * 16 * window.zoom_level
+            y_bottom = row_bottom * 16 * window.zoom_level
+            
+            window.map_canvas.create_line(x + 8*window.zoom_level, y_top + 8*window.zoom_level,
+                                         x + 8*window.zoom_level, y_bottom + 8*window.zoom_level,
+                                         fill='magenta', width=2, dash=(4, 4), tags='object_overlay')
+    
+    # Spawners
+    for spawn in objects['spawns']:
+        if spawn['y'] != 0:
+            col = spawn['y'] // 0x08
+            row_from_bottom = spawn['x'] // 0x08
+            row = (map_height - 1) - row_from_bottom
+            
+            x = col * 16 * window.zoom_level
+            y = row * 16 * window.zoom_level
+            size = 16 * window.zoom_level
+            
+            window.map_canvas.create_oval(x, y, x+size, y+size,
+                                         outline='red', width=2, tags='object_overlay')
 
 def render_tile_palette(window):
-    """Render the tile palette in organized groups"""
+    """Render the tile palette"""
     try:
         tile_spacing = 5
         tile_display_size = int(16 * window.zoom_level)
-        palette = window.palettes[window.selected_map]
+        palette = window.palettes[window.selected_map]  # Use window-local palette
         
         window.tile_images.clear()
         window.palette_canvas.delete('all')
         
-        # Helper function to render a group of tiles
-        def render_tile_group(title, tile_ids, start_x, start_y, tiles_per_row=8):
-            """Render a group of tiles with a title, returns bottom Y coordinate"""
-            # Group title
-            window.palette_canvas.create_text(start_x, start_y, 
-                                            text=title,
-                                            anchor='nw', 
-                                            fill='white', 
-                                            font=('Arial', 9, 'bold'))
-            current_y = start_y + 20
-            current_x = start_x
-            row_max_y = current_y
-            tile_count = 0
-            
-            for tile_id in tile_ids:
-                if tile_id >= len(window.tiles):
-                    continue
-                
-                # Render tile
-                tile = window.tiles[tile_id]
+        y_pos = tile_spacing
+        
+        # COMPOSITE OBJECTS section
+        window.palette_canvas.create_text(tile_spacing, y_pos, text='COMPOSITE OBJECTS',
+                                         anchor='nw', fill='white', font=('Arial', 9, 'bold'))
+        y_pos += 20
+        
+        x_pos = tile_spacing
+        max_y_in_row = y_pos
+        
+        # Teleporter (display as horizontal: 100-38-101)
+        teleporter_display = np.array([[100, 38, 101]])
+        comp_img = np.zeros((16, 48, 4), dtype=np.uint8)
+        for c in range(3):
+            tile_idx = teleporter_display[0, c]
+            if tile_idx < len(window.tiles):  # Use window-local tiles
+                tile = window.tiles[tile_idx]
                 color_tile = apply_palette_to_tile(tile, palette)
-                scale = int(window.zoom_level)
-                color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
-                tile_rgb = color_tile_large[:, :, :3]
-                tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
-                tile_photo = ImageTk.PhotoImage(tile_img)
-                
-                window.tile_images.append((tile_id, tile_photo))
-                
-                # Create clickable tile
-                img_id = window.palette_canvas.create_image(current_x, current_y, 
-                                                           image=tile_photo, 
-                                                           anchor='nw')
-                window.palette_canvas.tag_bind(img_id, '<Button-1>',
-                                              lambda e, tid=tile_id: on_tile_click(tid, window))
-                
-                # Label below
-                label_y = current_y + tile_display_size + 2
-                window.palette_canvas.create_text(current_x + tile_display_size//2, label_y,
-                                                text=f"0x{tile_id:02X}",
-                                                anchor='n',
-                                                fill='lightgray',
-                                                font=('Arial', 7))
-                
-                row_max_y = max(row_max_y, label_y + 15)
-                
-                # Move to next position
-                current_x += tile_display_size + tile_spacing
-                tile_count += 1
-                
-                # Wrap to next row if needed
-                if tile_count % tiles_per_row == 0:
-                    current_x = start_x
-                    current_y = row_max_y + tile_spacing
-                    row_max_y = current_y
+                comp_img[:, c*16:(c+1)*16] = color_tile
+        
+        scale = int(window.zoom_level)
+        comp_rgb = comp_img[:, :, :3]
+        comp_rgb_scaled = np.repeat(np.repeat(comp_rgb, scale, axis=0), scale, axis=1)
+        comp_pil = Image.fromarray(comp_rgb_scaled.astype('uint8')).convert('RGB')
+        comp_photo = ImageTk.PhotoImage(comp_pil)
+        
+        window.tile_images.append(('teleporter', comp_photo))
+        
+        img_id = window.palette_canvas.create_image(x_pos, y_pos, image=comp_photo, anchor='nw')
+        window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                      lambda e: on_composite_click('teleporter', window))
+        
+        label_y = y_pos + 16 * scale + 2
+        window.palette_canvas.create_text(x_pos + 24 * scale, label_y,
+                                        text="Teleporter", anchor='n', fill='lightgray',
+                                        font=('Arial', 7))
+        
+        max_y_in_row = max(max_y_in_row, label_y + 15)
+        x_pos += 48 * scale + tile_spacing * 2
+        
+        # Spawners (all 4 directions)
+        for direction in ['right', 'left', 'up', 'down']:
+            config = SPAWNER_CONFIGS[direction]
+            tiles = config['tiles']
+            h, w = tiles.shape
             
-            return row_max_y + 10  # Return bottom of this group
+            comp_img = np.zeros((h * 16, w * 16, 4), dtype=np.uint8)
+            for r in range(h):
+                for c in range(w):
+                    tile_idx = tiles[r, c]
+                    if tile_idx < len(window.tiles):  # Use window-local tiles
+                        tile = window.tiles[tile_idx]
+                        color_tile = apply_palette_to_tile(tile, palette)
+                        comp_img[r*16:(r+1)*16, c*16:(c+1)*16] = color_tile
+            
+            comp_rgb = comp_img[:, :, :3]
+            comp_rgb_scaled = np.repeat(np.repeat(comp_rgb, scale, axis=0), scale, axis=1)
+            comp_pil = Image.fromarray(comp_rgb_scaled.astype('uint8')).convert('RGB')
+            comp_photo = ImageTk.PhotoImage(comp_pil)
+            
+            window.tile_images.append((f'spawner_{direction}', comp_photo))
+            
+            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=comp_photo, anchor='nw')
+            window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                          lambda e, d=direction: on_composite_click(f'spawner_{d}', window))
+            
+            label_y = y_pos + h * 16 * scale + 2
+            window.palette_canvas.create_text(x_pos + w * 8 * scale, label_y,
+                                            text=f"Spawner\n{direction.title()}", anchor='n', 
+                                            fill='lightgray', font=('Arial', 7))
+            
+            max_y_in_row = max(max_y_in_row, label_y + 25)
+            x_pos += w * 16 * scale + tile_spacing * 2
         
-        # Layout in columns with proper spacing
-        column_width = 450  # Width for each column
-        x_offset = tile_spacing
-        y_offset = tile_spacing
+        y_pos = max_y_in_row + 10
         
-        # Column 1: Path,
-        current_y = render_tile_group("Walkable Path", PATH_TILES, x_offset + (column_width * 0), y_offset, tiles_per_row=1)
-        col1_bottom = current_y
-
-        # Column 2: Treasures
+        # TREASURES section
+        window.palette_canvas.create_text(tile_spacing, y_pos, text='TREASURES',
+                                         anchor='nw', fill='white', font=('Arial', 9, 'bold'))
+        y_pos += 20
+        
+        x_pos = tile_spacing
+        max_y_in_row = y_pos
+        
+        # Show empty and filled pairs + keyhole
         treasure_pairs = [(0x21, 0x6F), (0x22, 0x70), (0x4A, 0x62)]
-        treasure_tiles = []
         for empty_id, filled_id in treasure_pairs:
-            treasure_tiles.extend([empty_id, filled_id])
-        treasure_tiles.append(0x72)  # Add keyhole
-        
-        current_y = render_tile_group("Treasures", treasure_tiles, x_offset + (column_width * 1), y_offset, tiles_per_row=4)
-        col2_bottom = current_y
-
-        # Column 3: Decorative Walls
-        current_y = render_tile_group("Decorative Walls", WALL_TILES, x_offset + (column_width * 2), y_offset, tiles_per_row=8)
-        col3_bottom = current_y
-        
-        # Column 4: Spawn Walls
-        current_y = render_tile_group("Enemy Spawn Walls", SPAWNER_TILES, x_offset + (column_width * 3), y_offset, tiles_per_row=4)
-        col4_bottom = current_y
-
-        # Column 5: Teleport Pillars
-        current_y = render_tile_group("Teleport Pillars", TELEPORTER_TILES, x_offset + (column_width * 4), y_offset, tiles_per_row=2)
-        col5_bottom = current_y
-
-        # Object markers below first column
-        marker_y = col1_bottom + 20
-        window.palette_canvas.create_text(x_offset, marker_y, 
-                                        text="Object Markers",
-                                        anchor='nw', 
-                                        fill='white', 
-                                        font=('Arial', 9, 'bold'))
-        
-        marker_tile_y = marker_y + 20
-        marker_x = x_offset + 10
-        
-        # Helper to render an object marker
-        def render_object_marker(tile_id, label_text, label_color, click_type):
-            nonlocal marker_tile_y, marker_x
+            # Empty box
+            tile = window.tiles[empty_id]  # Use window-local tiles
+            color_tile = apply_palette_to_tile(tile, palette)
+            scale = int(window.zoom_level)
+            color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+            tile_rgb = color_tile_large[:, :, :3]
+            tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+            tile_photo = ImageTk.PhotoImage(tile_img)
             
-            tile = window.tiles[tile_id]
+            window.tile_images.append((empty_id, tile_photo))
+            
+            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
+            window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                          lambda e, tid=empty_id: on_tile_click(tid, window))
+            
+            label_y = y_pos + tile_display_size + 2
+            window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                            text=f"0x{empty_id:02X}", anchor='n', fill='lightgray',
+                                            font=('Arial', 7))
+            
+            x_pos += tile_display_size + tile_spacing
+            
+            # Filled box
+            tile = window.tiles[filled_id]  # Use window-local tiles
+            color_tile = apply_palette_to_tile(tile, palette)
+            color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+            tile_rgb = color_tile_large[:, :, :3]
+            tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+            tile_photo = ImageTk.PhotoImage(tile_img)
+            
+            window.tile_images.append((filled_id, tile_photo))
+            
+            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
+            window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                          lambda e, tid=filled_id: on_tile_click(tid, window))
+            
+            window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                            text=f"0x{filled_id:02X}", anchor='n', fill='lightgray',
+                                            font=('Arial', 7))
+            
+            max_y_in_row = max(max_y_in_row, label_y + 15)
+            x_pos += tile_display_size + tile_spacing * 2
+        
+        # Add keyhole
+        tile = window.tiles[0x72]  # Use window-local tiles
+        color_tile = apply_palette_to_tile(tile, palette)
+        scale = int(window.zoom_level)
+        color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
+        tile_rgb = color_tile_large[:, :, :3]
+        tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
+        tile_photo = ImageTk.PhotoImage(tile_img)
+        
+        window.tile_images.append((0x72, tile_photo))
+        
+        img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
+        window.palette_canvas.tag_bind(img_id, '<Button-1>',
+                                      lambda e: on_tile_click(0x72, window))
+        
+        label_y = y_pos + tile_display_size + 2
+        window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                        text="0x72", anchor='n', fill='lightgray',
+                                        font=('Arial', 7))
+        
+        max_y_in_row = max(max_y_in_row, label_y + 15)
+        
+        y_pos = max_y_in_row + 10
+        
+        # OBJECTS section
+        window.palette_canvas.create_text(tile_spacing, y_pos, text='OBJECTS',
+                                         anchor='nw', fill='white', font=('Arial', 9, 'bold'))
+        y_pos += 20
+        
+        x_pos = tile_spacing
+        max_y_in_row = y_pos
+        
+        # Object markers
+        object_markers = [
+            (0x29, 'player_start', 'Player Start'),
+            (0x17, 'respawn', 'Respawn Point')
+        ]
+        
+        for tile_id, obj_type, label_text in object_markers:
+            tile = window.tiles[tile_id]  # Use window-local tiles
             color_tile = apply_palette_to_tile(tile, palette)
             scale = int(window.zoom_level)
             color_tile_large = np.repeat(np.repeat(color_tile, scale, axis=0), scale, axis=1)
@@ -3055,31 +3161,22 @@ def render_tile_palette(window):
             
             window.tile_images.append((tile_id, tile_photo))
             
-            img_id = window.palette_canvas.create_image(marker_x, marker_tile_y, 
-                                                       image=tile_photo, 
-                                                       anchor='nw')
+            img_id = window.palette_canvas.create_image(x_pos, y_pos, image=tile_photo, anchor='nw')
             window.palette_canvas.tag_bind(img_id, '<Button-1>',
-                                          lambda e: on_object_marker_click(click_type, window))
+                                          lambda e, otype=obj_type: on_object_marker_click(otype, window))
             
-            label_y = marker_tile_y + tile_display_size + 2
-            window.palette_canvas.create_text(marker_x + tile_display_size//2, label_y,
-                                            text=label_text,
-                                            anchor='n',
-                                            fill=label_color,
-                                            font=('Arial', 8, 'bold'))
+            label_y = y_pos + tile_display_size + 2
+            window.palette_canvas.create_text(x_pos + tile_display_size//2, label_y,
+                                            text=label_text, anchor='n', fill='lightgray',
+                                            font=('Arial', 7))
             
-            marker_x += tile_display_size + (tile_spacing + 10) * 3
-        
-        # Render all object markers in a row
-        render_object_marker(RESPAWN_MARKER_TILE, "Player Respawn", "orange", 'respawn')
-        render_object_marker(ENEMY_SPAWN_MARKER_TILE, "Enemy Spawn", "red", 'enemy_spawn')
-        render_object_marker(TELEPORTER_MARKER_TILE, "Teleporter", "magenta", 'teleporter')
+            max_y_in_row = max(max_y_in_row, label_y + 15)
+            x_pos += tile_display_size + tile_spacing * 2
         
         window.palette_canvas.configure(scrollregion=window.palette_canvas.bbox("all"))
         
     except Exception as e:
         logging.error(f"Error rendering palette: {e}")
-
 
 def on_object_marker_click(object_type, window):
     """Handle clicking an object marker in the palette"""
@@ -3136,44 +3233,15 @@ def update_tile_info(window):
     """Update selected tile info"""
     try:
         if window.selected_object_type:
-            # Show the marker tile for the selected object type
-            marker_tiles = {
-                'Player Respawn': RESPAWN_MARKER_TILE,
-                'Enemy Spawn': ENEMY_SPAWN_MARKER_TILE,
-                'Teleporter': TELEPORTER_MARKER_TILE
-            }
-            
-            if window.selected_object_type in marker_tiles:
-                tile_id = marker_tiles[window.selected_object_type]
-                window.tile_info_var.set(f"Selected: {window.selected_object_type}")
-                
-                # Show tile preview
-                if tile_id < len(window.tiles):
-                    tile = window.tiles[tile_id]
-                    palette = window.palettes[window.selected_map]
-                    color_tile = apply_palette_to_tile(tile, palette)
-                    
-                    # Scale 2x for visibility
-                    color_tile_large = np.repeat(np.repeat(color_tile, 2, axis=0), 2, axis=1)
-                    tile_rgb = color_tile_large[:, :, :3]
-                    tile_img = Image.fromarray(tile_rgb.astype('uint8')).convert('RGB')
-                    tile_photo = ImageTk.PhotoImage(tile_img)
-                    
-                    window.selected_tile_preview.config(image=tile_photo)
-                    window.selected_tile_preview.image = tile_photo
-                else:
-                    window.selected_tile_preview.config(image='')
-            else:
-                window.tile_info_var.set(f"Selected: {window.selected_object_type}")
-                window.selected_tile_preview.config(image='')
-                
+            window.tile_info_var.set(f"Selected: {window.selected_object_type}")
+            window.selected_tile_preview.config(image='')
         elif window.selected_tile is not None:
             window.tile_info_var.set(f"Selected: 0x{window.selected_tile:02X}")
             
             # Show tile preview using window-local data
             if window.selected_tile < len(window.tiles):
-                tile = window.tiles[window.selected_tile]
-                palette = window.palettes[window.selected_map]
+                tile = window.tiles[window.selected_tile]  # Use window-local tiles
+                palette = window.palettes[window.selected_map]  # Use window-local palette
                 color_tile = apply_palette_to_tile(tile, palette)
                 
                 # Scale 2x for visibility
