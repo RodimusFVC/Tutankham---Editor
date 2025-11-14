@@ -793,6 +793,35 @@ def extract_pixels(rom, offset, height, width, mode='tile', bytes_per_row=None):
     
     return pixels
 
+def write_logical_tile_to_cache(map_index, row, col, byte_pair):
+    """Write logical bytes directly to ROM cache
+    
+    Args:
+        map_index: Which map (0-3)
+        row: Row in the map (0-11)
+        col: Column in the map (0-width)
+        byte_pair: [byte0, byte1] to write
+    """
+    rom_index = map_index // 2
+    map_in_rom = map_index % 2
+    
+    rom_name = ROM_CONFIG['logical_map_roms'][rom_index]
+    rom_data = rom_cache[rom_name]
+    
+    start_offset = map_in_rom * logical_map_size
+    
+    # In ROM, columns are stored with CC borders
+    # Our data column 0 is ROM column 1 (skip first CC column)
+    rom_col = col + 1
+    
+    # Our data row 0 is ROM row 1 (skip first CC row)
+    rom_row = row + 1
+    
+    col_offset = start_offset + (rom_col * 28)
+    
+    rom_data[col_offset + rom_row] = byte_pair[0]
+    rom_data[col_offset + 14 + rom_row] = byte_pair[1]
+
 def rotate_tile(tile):
     return np.rot90(tile, k=1)
 
@@ -887,27 +916,49 @@ def save_visual_maps_to_rom(maps):
             map_data.append(map_layout[flipped_row, col])
     rom_cache[ROM_CONFIG['visual_map_rom']][:len(map_data)] = map_data
 
-def load_logical_map_from_cache(map_index):
-    """Load a single logical map directly from ROM cache"""
+def load_logical_map_from_cache(map_index, actual_width=None):
+    """Load a single logical map directly from ROM cache
+    
+    Args:
+        map_index: Which map (0-3)
+        actual_width: Optional actual width in tiles (from map_width config)
+                     If None, loads full 64 columns
+    """
     rom_index = map_index // 2
     map_in_rom = map_index % 2
     
     rom_name = ROM_CONFIG['logical_map_roms'][rom_index]
     rom_data = rom_cache[rom_name]
     
-    start_offset = map_in_rom * logical_map_size
-    map_layout = np.zeros((64, 14, 2), dtype=np.uint8)
+    start_offset = map_in_rom * logical_map_size  # 0x700 per map
     
-    for tile_row in range(64):
-        row_offset = start_offset + (tile_row * 28)
-        for tile_col in range(14):
-            map_layout[tile_row, tile_col, 0] = rom_data[row_offset + tile_col]
-            map_layout[tile_row, tile_col, 1] = rom_data[row_offset + 14 + tile_col]
+    # Determine how many columns to load
+    cols_to_load = actual_width if actual_width else map_width
+    
+    # Load ROM structure: cols_to_load columns × 14 rows (with CC borders)
+    full_map = np.zeros((14, cols_to_load, 2), dtype=np.uint8)
+    
+    for col in range(cols_to_load):
+        col_offset = start_offset + (col * 28)
+        
+        for row in range(14):  # All 14 rows including borders
+            full_map[row, col, 0] = rom_data[col_offset + row]
+            full_map[row, col, 1] = rom_data[col_offset + 14 + row]
+    
+    # Filter out CC border rows (rows 0 and 13)
+    # Keep only rows 1-12 (the actual playable map)
+    map_layout = full_map[1:13, :, :]  # Rows 1-12, all columns, both bytes
     
     return map_layout
 
-def write_logical_tile_to_cache(map_index, logical_row, logical_col, byte_pair):
-    """Write logical bytes directly to ROM cache"""
+def save_logical_map_to_cache(map_index, map_layout, actual_width):
+    """Save entire logical map back to ROM with CC borders
+    
+    Args:
+        map_index: Which map (0-3)
+        map_layout: The 12×width×2 array to save
+        actual_width: Actual width in tiles (from map_width config)
+    """
     rom_index = map_index // 2
     map_in_rom = map_index % 2
     
@@ -915,10 +966,43 @@ def write_logical_tile_to_cache(map_index, logical_row, logical_col, byte_pair):
     rom_data = rom_cache[rom_name]
     
     start_offset = map_in_rom * logical_map_size
-    row_offset = start_offset + (logical_row * 28)
     
-    rom_data[row_offset + logical_col] = byte_pair[0]
-    rom_data[row_offset + 14 + logical_col] = byte_pair[1]
+    # Column 0: All CC borders
+    col_offset = start_offset
+    for row in range(14):
+        rom_data[col_offset + row] = 0xCC
+        rom_data[col_offset + 14 + row] = 0xCC
+    
+    # Columns 1 to (actual_width - 2): Data with CC borders at rows 0 and 13
+    for col in range(1, actual_width - 1):
+        col_offset = start_offset + (col * 28)
+        
+        # Row 0: CC border
+        rom_data[col_offset + 0] = 0xCC
+        rom_data[col_offset + 14 + 0] = 0xCC
+        
+        # Rows 1-12: Actual map data (col-1 because we skip the first CC column)
+        for row in range(12):
+            rom_row = row + 1
+            rom_data[col_offset + rom_row] = map_layout[row, col - 1, 0]
+            rom_data[col_offset + 14 + rom_row] = map_layout[row, col - 1, 1]
+        
+        # Row 13: CC border
+        rom_data[col_offset + 13] = 0xCC
+        rom_data[col_offset + 14 + 13] = 0xCC
+    
+    # Column (actual_width - 1): All CC borders
+    col_offset = start_offset + ((actual_width - 1) * 28)
+    for row in range(14):
+        rom_data[col_offset + row] = 0xCC
+        rom_data[col_offset + 14 + row] = 0xCC
+    
+    # Fill remaining columns with 0x00 (unused space)
+    for col in range(actual_width, map_width):
+        col_offset = start_offset + (col * 28)
+        for row in range(14):
+            rom_data[col_offset + row] = 0x00
+            rom_data[col_offset + 14 + row] = 0x00
 
 #########################################
 # Map Configuration Functions
@@ -976,7 +1060,7 @@ def load_object_data(map_index, difficulty=0):
     objects = {
         'player_start': {'y': 0, 'x': 0},
         'respawns': [],
-        'respawn_count': 0,
+        'map_width': 0,
         'items': [],
         'teleports': [],
         'spawns': []
@@ -1000,8 +1084,8 @@ def load_object_data(map_index, difficulty=0):
         objects['respawns'].append(respawn)
         pos += 3
 
-    # Read respawn count
-    objects['respawn_count'] = read_byte_from_roms(pos)
+    # Read Map Width
+    objects['map_width'] = read_byte_from_roms(pos)
     pos += 1
 
     # Read items (14 × 16 bytes)
@@ -1045,20 +1129,20 @@ def save_object_data(objects, map_index, difficulty=0):
     
     pos = offset
     # Write player start
-    write_byte_to_roms(pos, objects['player_start']['y'] & 0xFF)
-    write_byte_to_roms(pos + 1, (objects['player_start']['y'] >> 8) & 0xFF)
+    write_byte_to_roms(pos, (objects['player_start']['y'] >> 8) & 0xFF)
+    write_byte_to_roms(pos + 1, objects['player_start']['y'] & 0xFF)
     write_byte_to_roms(pos + 2, objects['player_start']['x'])
     pos += 3
     
     # Write respawns
     for respawn in objects['respawns']:
-        write_byte_to_roms(pos, respawn['y'] & 0xFF)
-        write_byte_to_roms(pos + 1, (respawn['y'] >> 8) & 0xFF)
+        write_byte_to_roms(pos, (respawn['y'] >> 8) & 0xFF)
+        write_byte_to_roms(pos + 1, respawn['y'] & 0xFF)
         write_byte_to_roms(pos + 2, respawn['x'])
         pos += 3
     
-    # Write respawn count
-    write_byte_to_roms(pos, objects['respawn_count'])
+    # Write Map Width
+    write_byte_to_roms(pos, objects['map_width'])
     pos += 1
     
     # Write items
@@ -1066,8 +1150,8 @@ def save_object_data(objects, map_index, difficulty=0):
         write_byte_to_roms(pos, 0x01 if item['active'] else 0x00)
         for i in range(1, 5):
             write_byte_to_roms(pos + i, 0x00)
-        write_byte_to_roms(pos + 5, item['y'] & 0xFF)
-        write_byte_to_roms(pos + 6, (item['y'] >> 8) & 0xFF)
+        write_byte_to_roms(pos + 5, (item['y'] >> 8) & 0xFF)
+        write_byte_to_roms(pos + 6, item['y'] & 0xFF)
         write_byte_to_roms(pos + 7, item['x'])
         for i in range(8, 15):
             write_byte_to_roms(pos + i, 0x00)
@@ -1079,8 +1163,8 @@ def save_object_data(objects, map_index, difficulty=0):
     
     # Write teleports
     for teleport in objects['teleports']:
-        write_byte_to_roms(pos, teleport['y'] & 0xFF)
-        write_byte_to_roms(pos + 1, (teleport['y'] >> 8) & 0xFF)
+        write_byte_to_roms(pos, (teleport['y'] >> 8) & 0xFF)
+        write_byte_to_roms(pos + 1, teleport['y'] & 0xFF)
         write_byte_to_roms(pos + 2, teleport['bottom_row'])
         write_byte_to_roms(pos + 3, teleport['top_row'])
         for i in range(4, 8):
@@ -1089,8 +1173,8 @@ def save_object_data(objects, map_index, difficulty=0):
     
     # Write spawns
     for spawn in objects['spawns']:
-        write_byte_to_roms(pos, spawn['y'] & 0xFF)
-        write_byte_to_roms(pos + 1, (spawn['y'] >> 8) & 0xFF)
+        write_byte_to_roms(pos, (spawn['y'] >> 8) & 0xFF)
+        write_byte_to_roms(pos + 1, spawn['y'] & 0xFF)
         write_byte_to_roms(pos + 2, spawn['x'])
         write_byte_to_roms(pos + 3, 0x00)
         pos += 4
@@ -1124,8 +1208,14 @@ def find_door(map_index):
 def find_teleporters(map_index):
     """Find all valid teleporter columns from object data"""
     teleporter_cols = []
+
+    # Get actual width
+    config_data = load_map_config(map_index, 0)  # Use difficulty 0
+    map_width_value = config_data.get('map_width', 1)
+    actual_width = (map_width_value + 1) * 16
+    
     visual_map = load_visual_map_from_cache(map_index)
-    logical_map = load_logical_map_from_cache(map_index)
+    logical_map = load_logical_map_from_cache(map_index, actual_width)
     
     # Check all difficulties for this map
     for diff in range(NUM_DIFFICULTIES):
@@ -1144,7 +1234,7 @@ def find_teleporters(map_index):
             top_row = (map_height - 1) - top_row_from_bottom
             
             # Validate bounds
-            if col < 0 or col >= map_width:
+            if col < 0 or col >= actual_width:
                 continue
             if bottom_row < 0 or bottom_row >= map_height:
                 continue
@@ -1162,14 +1252,9 @@ def find_teleporters(map_index):
                 continue
             
             # Validate both endpoints on walkable tiles (logical)
-            logical_row_bottom = col
-            logical_col_bottom = bottom_row + 1
-            logical_row_top = col
-            logical_col_top = top_row + 1
-            
-            if not np.array_equal(logical_map[logical_row_bottom, logical_col_bottom], [0x00, 0x00]):
+            if not np.array_equal(logical_map[bottom_row, col], [0x00, 0x00]):
                 continue
-            if not np.array_equal(logical_map[logical_row_top, logical_col_top], [0x00, 0x00]):
+            if not np.array_equal(logical_map[top_row, col], [0x00, 0x00]):
                 continue
             
             # Valid teleporter found
@@ -1181,8 +1266,13 @@ def find_teleporters(map_index):
 def validate_teleporters(window):
     """Remove teleporter entries that are invalid"""
     for map_idx in range(num_maps):
+        # Get actual width
+        config_data = window.map_config[0][map_idx]  # Use difficulty 0
+        map_width_value = config_data.get('map_width', 1)
+        actual_width = (map_width_value + 1) * 16
+        
         visual_map = load_visual_map_from_cache(map_idx)
-        logical_map = load_logical_map_from_cache(map_idx)
+        logical_map = load_logical_map_from_cache(map_idx, actual_width)
         
         # Check all difficulties for this map
         for diff in range(NUM_DIFFICULTIES):
@@ -1203,11 +1293,8 @@ def validate_teleporters(window):
                 bottom_row = (map_height - 1) - bottom_row_from_bottom
                 top_row = (map_height - 1) - top_row_from_bottom
 
-                logical_col_bottom = bottom_row_from_bottom + 1
-                logical_col_top = top_row_from_bottom + 1
-
                 # Validate column in bounds
-                if col < 0 or col >= map_width:
+                if col < 0 or col >= actual_width:
                     logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} column out of bounds, removing")
                     is_valid = False
                 
@@ -1232,23 +1319,21 @@ def validate_teleporters(window):
                 
                 # Validate both endpoints on walkable tiles (logical 0x00, 0x00)
                 if is_valid:
-                   
-                    if not np.array_equal(logical_map[col, logical_col_bottom], [0x00, 0x00]):
+                    if not np.array_equal(logical_map[bottom_row, col], [0x00, 0x00]):
                         logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} bottom not on walkable tile (logical), removing")
                         is_valid = False
                     
-                    if is_valid and not np.array_equal(logical_map[col, logical_col_top], [0x00, 0x00]):
+                    if is_valid and not np.array_equal(logical_map[top_row, col], [0x00, 0x00]):
                         logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} top not on walkable tile (logical), removing")
                         is_valid = False
                 
                 # Remove if invalid
                 if not is_valid:
-                    logging.info (f"Validating Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} : ")
-                    logging.info (f"  Data Object  : Column 0x{tp['y']:04X}, Row 1 0x{tp['top_row']:02X}, Row 2 0x{tp['bottom_row']:02X}")
-                    logging.info (f"  Visual Data  : Row 1 Tile 0x{visual_map[top_row, col]:02X} / Row 2 Tile 0x{visual_map[bottom_row, col]:02X}")
-                    logging.info (f"  Visual  Row 1 {top_row} / Row 2 {bottom_row}")
-                    logging.info (f"  Logical Row 1 {logical_col_top} / Row 2 {logical_col_bottom}")
-                    logging.info (f"  Logical Data : Row 1 Values {logical_map[col, logical_col_top]} / Row 2 Values {logical_map[col, logical_col_bottom]}")
+#                    logging.info (f"Validating Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} : ")
+#                    logging.info (f"  Data Object  : Column 0x{tp['y']:04X}, Row 1 0x{tp['top_row']:02X}, Row 2 0x{tp['bottom_row']:02X}")
+#                    logging.info (f"  Column {col} / Row 1 {top_row} / Row 2 {bottom_row}")
+#                    logging.info (f"  Visual Data  : Row 1 Tile 0x{visual_map[top_row, col]:02X} / Row 2 Tile 0x{visual_map[bottom_row, col]:02X}")
+#                    logging.info (f"  Logical Data : Row 1 Values {logical_map[top_row, col, :]} / Row 2 Values {logical_map[bottom_row, col, :]}")
                     tp['y'] = 0
                     tp['top_row'] = 0
                     tp['bottom_row'] = 0
@@ -1271,7 +1356,7 @@ def place_spawn_visualization_tiles(window):
                 write_visual_tile_to_cache(map_idx, row, col, 0x29)
         
         # Place respawn flame tiles
-        for i in range(objects['respawn_count']):
+        for i in range(2):
             respawn = objects['respawns'][i]
             if respawn['y'] != 0:
                 row_from_bottom = respawn['x'] // 0x08
@@ -1521,7 +1606,7 @@ def launch_map_editor():
             editor_window.destroy()
         
         editor_window.protocol("WM_DELETE_WINDOW", on_close)
-        
+
         build_map_editor_ui(editor_window)
         render_map_view(editor_window)
         render_tile_palette(editor_window)
@@ -1953,7 +2038,21 @@ def build_left_panel(window):
     ttk.Label(spawn_frame, text="(1-14)").pack(side=tk.LEFT)
     ttk.Button(spawn_frame, text="Set", width=5,
               command=lambda: set_spawn_rate(window)).pack(side=tk.LEFT, padx=5)
-    
+
+    # Map Width
+    width_frame = ttk.Frame(config_frame)
+    width_frame.pack(fill=tk.X, pady=2)
+    ttk.Label(width_frame, text="Width:").pack(side=tk.LEFT)
+    window.map_width_var = tk.IntVar()
+    width_slider = ttk.Scale(width_frame, 
+                            from_=0, to=3, 
+                            orient=tk.HORIZONTAL,
+                            variable=window.map_width_var,
+                            command=lambda v: set_map_width(window))
+    width_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+    window.map_width_label = ttk.Label(width_frame, text="32 tiles", width=10)
+    window.map_width_label.pack(side=tk.LEFT)
+
     ttk.Separator(window.left_panel, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
     
     # Object Counts
@@ -2208,6 +2307,10 @@ def is_door_tile(row, col, window):
 
 def clear_door(row, col, window):
     """Clear door from position - writes directly to ROM cache"""
+    config = window.map_config[window.difficulty][window.selected_map]
+    map_width_value = config.get('map_width', 1)
+    actual_width = (map_width_value + 1) * 16
+    
     for dr in range(3):
         for dc in range(3):
             # Clear visual tile
@@ -2215,12 +2318,16 @@ def clear_door(row, col, window):
             
             # Clear logical bytes
             logical_row = col + dc
-            logical_col = row + dr + 1
+            logical_col = row + dr
             write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x00, 0x00])
 
 def place_door_at(row, col, window):
     """Place door at position - writes directly to ROM cache"""
-    if row + 3 > map_height or col + 3 > map_width:
+    config = window.map_config[window.difficulty][window.selected_map]
+    map_width_value = config.get('map_width', 1)
+    actual_width = (map_width_value + 1) * 16
+    
+    if row + 3 > map_height or col + 3 > actual_width:
         return False
     
     for dr in range(3):
@@ -2230,7 +2337,7 @@ def place_door_at(row, col, window):
             
             # Write logical bytes
             logical_row = col + dc
-            logical_col = row + dr + 1
+            logical_col = row + dr
             write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, DOOR_LOGICAL[dr, dc])
     
     return True
@@ -2247,7 +2354,7 @@ def place_object_marker(row, col, window):
         
         if window.selected_object_type == 'respawn':
             # Check if we have room
-            if objects['respawn_count'] >= NUM_RESPAWNS:
+            if respawn.count >= NUM_RESPAWNS:
                 messagebox.showwarning("Limit Reached", 
                     f"Maximum {NUM_RESPAWNS} respawn points allowed")
                 return
@@ -2257,7 +2364,6 @@ def place_object_marker(row, col, window):
                 if respawn['y'] == 0:  # Empty slot
                     respawn['x'] = x
                     respawn['y'] = y
-                    objects['respawn_count'] += 1
                     break
             
             mark_modified(window)
@@ -2299,6 +2405,17 @@ def place_object_marker(row, col, window):
 def place_tile(row, col, window):
     """Place a tile on the map - writes directly to ROM cache"""
     try:
+        # Get actual width first
+        config = window.map_config[window.difficulty][window.selected_map]
+        map_width_value = config.get('map_width', 1)
+        actual_width = (map_width_value + 1) * 16
+        
+        # Check if column is within valid width
+        if col >= actual_width:
+            messagebox.showwarning("Invalid Position", 
+                f"Column {col} is outside map width ({actual_width} tiles)")
+            return
+        
         # Check if this is a door tile
         if is_door_tile(row, col, window):
             messagebox.showwarning("Protected", 
@@ -2308,18 +2425,15 @@ def place_tile(row, col, window):
         # Write visual tile directly to cache
         write_visual_tile_to_cache(window.selected_map, row, col, window.selected_tile)
         
-        # Write logical bytes directly to cache
-        logical_row = col
-        logical_col = row + 1
-        
+        # Write logical bytes directly to cache (NO coordinate transform!)
         if window.selected_tile == empty_path_tile:
-            write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x00, 0x00])
+            write_logical_tile_to_cache(window.selected_map, row, col, [0x00, 0x00])
         else:
             # Check existing logical bytes
-            logical_map = load_logical_map_from_cache(window.selected_map)
-            existing_pair = logical_map[logical_row, logical_col]
+            logical_map = load_logical_map_from_cache(window.selected_map, actual_width)
+            existing_pair = logical_map[row, col, :]
             if np.array_equal(existing_pair, [0x00, 0x00]) or np.array_equal(existing_pair, [0x55, 0x55]):
-                write_logical_tile_to_cache(window.selected_map, logical_row, logical_col, [0x55, 0x55])
+                write_logical_tile_to_cache(window.selected_map, row, col, [0x55, 0x55])
         
         mark_modified(window)
         render_map_view(window)
@@ -2536,7 +2650,6 @@ def on_map_right_click(event, window):
                 for j in range(i, NUM_RESPAWNS - 1):
                     objects['respawns'][j] = objects['respawns'][j + 1].copy()
                 objects['respawns'][-1] = {'x': 0, 'y': 0}
-                objects['respawn_count'] = max(0, objects['respawn_count'] - 1)
                 save_object_data(objects, window.selected_map, window.difficulty)
                 mark_modified(window)
                 window.status_var.set(f"Deleted respawn point at ({col}, {row})")
@@ -2621,19 +2734,27 @@ def on_composite_click(composite_id, window):
 def render_map_view(window):
     """Render the map display - reads directly from ROM cache"""
     try:
+        # Get actual map width from config
+        config = window.map_config[window.difficulty][window.selected_map]
+        map_width_value = config.get('map_width', 1)
+        actual_width = (map_width_value + 1) * 16  # Convert to tile count
+        
         # Load map directly from cache
         visual_map = load_visual_map_from_cache(window.selected_map)
         
-        map_image = np.zeros((visual_map.shape[0] * 16, visual_map.shape[1] * 16, 4), 
+        # Only render the valid width
+        valid_map = visual_map[:, :actual_width]
+        
+        map_image = np.zeros((valid_map.shape[0] * 16, valid_map.shape[1] * 16, 4), 
                             dtype=np.uint8)
         
         # Use window-local palette
         palette = window.palettes[window.selected_map]
         
         # Render each tile using window-local tiles
-        for row in range(visual_map.shape[0]):
-            for col in range(visual_map.shape[1]):
-                tile_index = visual_map[row, col]
+        for row in range(valid_map.shape[0]):
+            for col in range(valid_map.shape[1]):
+                tile_index = valid_map[row, col]
                 if tile_index < len(window.tiles):
                     tile = window.tiles[tile_index]
                     color_tile = apply_palette_to_tile(tile, palette)
@@ -2664,26 +2785,27 @@ def render_map_view(window):
         
         # Draw grid if enabled (LAST, on top of everything)
         if window.show_grid.get():
-            for x in range(0, int(map_width * 16 * window.zoom_level), int(16 * window.zoom_level)):
+            for x in range(0, int(actual_width * 16 * window.zoom_level), int(16 * window.zoom_level)):
                 window.map_canvas.create_line(x, 0, x, int(map_height * 16 * window.zoom_level), 
                                              fill='#444444')
             for y in range(0, int(map_height * 16 * window.zoom_level), int(16 * window.zoom_level)):
-                window.map_canvas.create_line(0, y, int(map_width * 16 * window.zoom_level), y, 
+                window.map_canvas.create_line(0, y, int(actual_width * 16 * window.zoom_level), y, 
                                              fill='#444444')
         
         # Draw door highlight if selected
         if window.selected_door is not None:
             row, col = window.selected_door
-            x = col * 16 * window.zoom_level
-            y = row * 16 * window.zoom_level
-            size = 3 * 16 * window.zoom_level
-            window.map_canvas.create_rectangle(x-2, y-2, x+size+2, y+size+2,
-                                             outline='cyan', width=3, tags='door_highlight')
+            if col + 3 <= actual_width:  # Only show if door is within valid width
+                x = col * 16 * window.zoom_level
+                y = row * 16 * window.zoom_level
+                size = 3 * 16 * window.zoom_level
+                window.map_canvas.create_rectangle(x-2, y-2, x+size+2, y+size+2,
+                                                 outline='cyan', width=3, tags='door_highlight')
         
         # Draw door ghost if dragging
         if window.door_ghost_pos is not None:
             row, col = window.door_ghost_pos
-            if row + 3 <= map_height and col + 3 <= map_width:
+            if row + 3 <= map_height and col + 3 <= actual_width:
                 x = col * 16 * window.zoom_level
                 y = row * 16 * window.zoom_level
                 size = 3 * 16 * window.zoom_level
@@ -2691,9 +2813,9 @@ def render_map_view(window):
                                                  outline='yellow', width=2, dash=(4, 4),
                                                  tags='door_ghost')
         
-        # Update scroll region
+        # Update scroll region to match actual width
         window.map_canvas.configure(scrollregion=(0, 0, 
-                                                 int(map_width * 16 * window.zoom_level), 
+                                                 int(actual_width * 16 * window.zoom_level), 
                                                  int(map_height * 16 * window.zoom_level)))
         
     except Exception as e:
@@ -2753,7 +2875,7 @@ def draw_objects_overlay(window):
             draw_sprite_overlay(PLAYER_START_MARKER_TILE, row, col, 'lime', alpha=220)
     
     # Respawns (orange outline, 0x17 flame sprite)
-    for i in range(objects['respawn_count']):
+    for i in range(2):
         respawn = objects['respawns'][i]
         if respawn['y'] != 0:
             col = respawn['y'] // 0x08
@@ -2973,6 +3095,25 @@ def on_tile_click(tile_id, window):
     update_tile_info(window)
     window.status_var.set(f"Selected tile 0x{tile_id:02X}")
 
+def set_map_width(window):
+    """Set map width for current map/difficulty"""
+    try:
+        new_width = int(window.map_width_var.get())
+        if new_width < 0 or new_width > 3:
+            messagebox.showwarning("Invalid Value", "Map width must be 0-3")
+            return
+        
+        # Update label to show tile count
+        tile_count = (new_width + 1) * 16
+        window.map_width_label.config(text=f"{tile_count} tiles")
+        
+        window.map_config[window.difficulty][window.selected_map]['map_width'] = new_width
+        mark_modified(window)
+        window.status_var.set(f"Map width set to {new_width} ({tile_count} tiles)")
+        render_map_view(window)        
+    except ValueError:
+        messagebox.showwarning("Invalid Value", "Please enter a valid number (0-3)")
+
 def update_map_counters(window):
     """Update object counters"""
     try:
@@ -2987,7 +3128,8 @@ def update_map_counters(window):
         active_spawners = sum(1 for spawn in objects['spawns'] if spawn['y'] != 0)
         window.spawners_label.config(text=f"Spawners: {active_spawners}/7")
         
-        window.respawns_label.config(text=f"Respawns: {objects['respawn_count']}/3")
+        active_respawn  = sum(1 for respawn in objects['respawn'] if respawn['y'] != 0)
+        window.respawns_label.config(text=f"Respawns: {active_respawn}/3")
         
         # Validate keys vs keyholes
         keys = sum(1 for item in objects['items'] if item['active'] and item['tile_id'] == 0x70)
@@ -3007,6 +3149,10 @@ def update_map_config_display(window):
         config = window.map_config[window.difficulty][window.selected_map]
         window.time_limit_var.set(str(config['time_limit']))
         window.spawn_rate_var.set(str(config['spawn_rate']))
+        width_value = config.get('map_width', 1)
+        window.map_width_var.set(width_value)
+        tile_count = (width_value + 1) * 16
+        window.map_width_label.config(text=f"{tile_count} tiles")
     except Exception as e:
         logging.error(f"Error updating config display: {e}")
 
