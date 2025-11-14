@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v0.21"	# Editor Version Number
+EDITOR_VERSION = "v0.20"	# Editor Version Number
 open_windows = {			# Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -942,9 +942,8 @@ def load_logical_map_from_cache(map_index, actual_width=None):
         col_offset = start_offset + (col * 28)
         
         for row in range(14):  # All 14 rows including borders
-            flipped_row = map_height + 1 - row
-            full_map[flipped_row, col, 0] = rom_data[col_offset + row]
-            full_map[flipped_row, col, 1] = rom_data[col_offset + 14 + row]
+            full_map[row, col, 0] = rom_data[col_offset + row]
+            full_map[row, col, 1] = rom_data[col_offset + 14 + row]
     
     # Filter out CC border rows (rows 0 and 13)
     # Keep only rows 1-12 (the actual playable map)
@@ -1209,14 +1208,18 @@ def find_door(map_index):
 def find_teleporters(map_index):
     """Find all valid teleporter columns from object data"""
     teleporter_cols = []
+
+    # Get actual width
+    config_data = load_map_config(map_index, 0)  # Use difficulty 0
+    map_width_value = config_data.get('map_width', 1)
+    actual_width = (map_width_value + 1) * 16
+    
     visual_map = load_visual_map_from_cache(map_index)
+    logical_map = load_logical_map_from_cache(map_index, actual_width)
     
     # Check all difficulties for this map
     for diff in range(NUM_DIFFICULTIES):
         objects = load_object_data(map_index, diff)
-        map_width_value = objects.get('map_width', 1)
-        actual_width = (map_width_value + 1) * 16
-        logical_map = load_logical_map_from_cache(map_index, actual_width)
         for tp in objects['teleports']:
             if tp['y'] == 0:
                 continue  # Empty slot
@@ -1263,18 +1266,18 @@ def find_teleporters(map_index):
 def validate_teleporters(window):
     """Remove teleporter entries that are invalid"""
     for map_idx in range(num_maps):
+        # Get actual width
+        config_data = window.map_config[0][map_idx]  # Use difficulty 0
+        map_width_value = config_data.get('map_width', 1)
+        actual_width = (map_width_value + 1) * 16
+        
         visual_map = load_visual_map_from_cache(map_idx)
+        logical_map = load_logical_map_from_cache(map_idx, actual_width)
         
         # Check all difficulties for this map
         for diff in range(NUM_DIFFICULTIES):
             objects = window.object_data[diff][map_idx]
             
-            # Get actual width from object data
-            map_width_value = objects.get('map_width', 1)
-            actual_width = (map_width_value + 1) * 16
-            
-            # Load logical map with correct width
-            logical_map = load_logical_map_from_cache(map_idx, actual_width)
             for tp_idx, tp in enumerate(objects['teleports']):
                 if tp['y'] == 0:
                     continue  # Already empty
@@ -1283,8 +1286,12 @@ def validate_teleporters(window):
                 
                 # Get coordinates
                 col = tp['y'] // 0x08
-                bottom_row = (map_height - 1) - (tp['bottom_row'] // 0x08)
-                top_row = (map_height - 1) - (tp['top_row'] // 0x08)
+                bottom_row_from_bottom = tp['bottom_row'] // 0x08
+                top_row_from_bottom = tp['top_row'] // 0x08
+                
+                # Convert to array indices (flip row)
+                bottom_row = (map_height - 1) - bottom_row_from_bottom
+                top_row = (map_height - 1) - top_row_from_bottom
 
                 # Validate column in bounds
                 if col < 0 or col >= actual_width:
@@ -1319,15 +1326,14 @@ def validate_teleporters(window):
                     if is_valid and not np.array_equal(logical_map[top_row, col], [0x00, 0x00]):
                         logging.warning(f"Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} top not on walkable tile (logical), removing")
                         is_valid = False
-
-#                logging.info (f"Validating Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} : ")
-#                logging.info (f"  Data Object  : Column 0x{tp['y']:04X}, Row 1 0x{tp['top_row']:02X}, Row 2 0x{tp['bottom_row']:02X}")
-#                logging.info (f"  Column {col} / Row 1 {top_row} / Row 2 {bottom_row}")
-#                logging.info (f"  Visual Data  : Row 1 Tile 0x{visual_map[top_row, col]:02X} / Row 2 Tile 0x{visual_map[bottom_row, col]:02X}")
-#                logging.info (f"  Logical Data : Row 1 Values {logical_map[top_row, col, :]} / Row 2 Values {logical_map[bottom_row, col, :]}")
-
+                
                 # Remove if invalid
                 if not is_valid:
+#                    logging.info (f"Validating Map {map_idx+1}/D{diff+1}: Teleporter {tp_idx} : ")
+#                    logging.info (f"  Data Object  : Column 0x{tp['y']:04X}, Row 1 0x{tp['top_row']:02X}, Row 2 0x{tp['bottom_row']:02X}")
+#                    logging.info (f"  Column {col} / Row 1 {top_row} / Row 2 {bottom_row}")
+#                    logging.info (f"  Visual Data  : Row 1 Tile 0x{visual_map[top_row, col]:02X} / Row 2 Tile 0x{visual_map[bottom_row, col]:02X}")
+#                    logging.info (f"  Logical Data : Row 1 Values {logical_map[top_row, col, :]} / Row 2 Values {logical_map[bottom_row, col, :]}")
                     tp['y'] = 0
                     tp['top_row'] = 0
                     tp['bottom_row'] = 0
@@ -2301,8 +2307,8 @@ def is_door_tile(row, col, window):
 
 def clear_door(row, col, window):
     """Clear door from position - writes directly to ROM cache"""
-    objects = window.object_data[window.difficulty][window.selected_map]
-    map_width_value = objects.get('map_width', 1)
+    config = window.map_config[window.difficulty][window.selected_map]
+    map_width_value = config.get('map_width', 1)
     actual_width = (map_width_value + 1) * 16
     
     for dr in range(3):
@@ -2317,8 +2323,8 @@ def clear_door(row, col, window):
 
 def place_door_at(row, col, window):
     """Place door at position - writes directly to ROM cache"""
-    objects = window.object_data[window.difficulty][window.selected_map]
-    map_width_value = objects.get('map_width', 1)
+    config = window.map_config[window.difficulty][window.selected_map]
+    map_width_value = config.get('map_width', 1)
     actual_width = (map_width_value + 1) * 16
     
     if row + 3 > map_height or col + 3 > actual_width:
@@ -2400,7 +2406,7 @@ def place_tile(row, col, window):
     """Place a tile on the map - writes directly to ROM cache"""
     try:
         # Get actual width first
-        config = window.object_data[window.difficulty][window.selected_map]
+        config = window.map_config[window.difficulty][window.selected_map]
         map_width_value = config.get('map_width', 1)
         actual_width = (map_width_value + 1) * 16
         
@@ -2729,8 +2735,8 @@ def render_map_view(window):
     """Render the map display - reads directly from ROM cache"""
     try:
         # Get actual map width from config
-        objects = window.object_data[window.difficulty][window.selected_map]
-        map_width_value = objects.get('map_width', 1)
+        config = window.map_config[window.difficulty][window.selected_map]
+        map_width_value = config.get('map_width', 1)
         actual_width = (map_width_value + 1) * 16  # Convert to tile count
         
         # Load map directly from cache
@@ -3101,7 +3107,7 @@ def set_map_width(window):
         tile_count = (new_width + 1) * 16
         window.map_width_label.config(text=f"{tile_count} tiles")
         
-        window.object_data[window.difficulty][window.selected_map]['map_width'] = new_width
+        window.map_config[window.difficulty][window.selected_map]['map_width'] = new_width
         mark_modified(window)
         window.status_var.set(f"Map width set to {new_width} ({tile_count} tiles)")
         render_map_view(window)        
