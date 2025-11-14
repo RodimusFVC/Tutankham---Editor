@@ -3128,8 +3128,8 @@ def update_map_counters(window):
         active_spawners = sum(1 for spawn in objects['spawns'] if spawn['y'] != 0)
         window.spawners_label.config(text=f"Spawners: {active_spawners}/7")
         
-        active_respawn  = sum(1 for respawn in objects['respawn'] if respawn['y'] != 0)
-        window.respawns_label.config(text=f"Respawns: {active_respawn}/3")
+        active_respawns = sum(1 for respawn in objects['respawns'] if respawn['y'] != 0)
+        window.respawns_label.config(text=f"Respawns: {active_respawns}/3")
         
         # Validate keys vs keyholes
         keys = sum(1 for item in objects['items'] if item['active'] and item['tile_id'] == 0x70)
@@ -3149,7 +3149,8 @@ def update_map_config_display(window):
         config = window.map_config[window.difficulty][window.selected_map]
         window.time_limit_var.set(str(config['time_limit']))
         window.spawn_rate_var.set(str(config['spawn_rate']))
-        width_value = config.get('map_width', 1)  #FIXME - This is not in config, it's in objects.....
+        objects = window.object_data[window.difficulty][window.selected_map]
+        width_value = objects.get('map_width', 1)
         window.map_width_var.set(width_value)
         tile_count = (width_value + 1) * 16
         window.map_width_label.config(text=f"{tile_count} tiles")
