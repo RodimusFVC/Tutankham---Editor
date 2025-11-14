@@ -815,11 +815,11 @@ def write_logical_tile_to_cache(map_index, row, col, byte_pair):
     rom_col = col + 1
     
     # Our data row 0 is ROM row 1 (skip first CC row)
-    rom_row = row + 1
+    rom_row = 13 - row
     
     col_offset = start_offset + (rom_col * 28)
     
-    rom_data[col_offset + rom_row] = byte_pair[0]
+    rom_data[col_offset + rom_row]      = byte_pair[0]
     rom_data[col_offset + 14 + rom_row] = byte_pair[1]
 
 def rotate_tile(tile):
@@ -953,52 +953,48 @@ def load_logical_map_from_cache(map_index, actual_width=None):
     return map_layout
 
 def save_logical_map_to_cache(map_index, map_layout, actual_width):
-    """Save entire logical map back to ROM with CC borders
+    """Save entire logical map back to ROM with CC borders.
     
-    Args:
-        map_index: Which map (0-3)
-        map_layout: The 12×width×2 array to save
-        actual_width: Actual width in tiles (from map_width config)
+    map_layout is a 12 × width × 2 array (rows 0–11).
+    Loader flips rows, so saving must flip back.
     """
     rom_index = map_index // 2
     map_in_rom = map_index % 2
-    
+
     rom_name = ROM_CONFIG['logical_map_roms'][rom_index]
     rom_data = rom_cache[rom_name]
-    
+
     start_offset = map_in_rom * logical_map_size
-    
-    # Column 0: All CC borders
-    col_offset = start_offset
-    for row in range(14):
-        rom_data[col_offset + row] = 0xCC
-        rom_data[col_offset + 14 + row] = 0xCC
-    
-    # Columns 1 to (actual_width - 2): Data with CC borders at rows 0 and 13
-    for col in range(1, actual_width - 1):
+
+    # Write columns 0..(actual_width-1)
+    for col in range(actual_width):
         col_offset = start_offset + (col * 28)
-        
-        # Row 0: CC border
-        rom_data[col_offset + 0] = 0xCC
-        rom_data[col_offset + 14 + 0] = 0xCC
-        
-        # Rows 1-12: Actual map data (col-1 because we skip the first CC column)
-        for row in range(12):
-            rom_row = row + 1
-            rom_data[col_offset + rom_row] = map_layout[row, col - 1, 0]
-            rom_data[col_offset + 14 + rom_row] = map_layout[row, col - 1, 1]
-        
-        # Row 13: CC border
-        rom_data[col_offset + 13] = 0xCC
-        rom_data[col_offset + 14 + 13] = 0xCC
-    
-    # Column (actual_width - 1): All CC borders
-    col_offset = start_offset + ((actual_width - 1) * 28)
-    for row in range(14):
-        rom_data[col_offset + row] = 0xCC
-        rom_data[col_offset + 14 + row] = 0xCC
-    
-    # Fill remaining columns with 0x00 (unused space)
+
+        # 14 rows total (0–13)
+        for rom_row in range(14):
+
+            # Determine if this row is a CC border row
+            is_border = (rom_row == 0 or rom_row == 13)
+
+            if is_border:
+                # Both bytes = CC
+                rom_data[col_offset + rom_row] = 0xCC
+                rom_data[col_offset + 14 + rom_row] = 0xCC
+            else:
+                # Internal row: flipped mapping
+                flipped_row = 14 - rom_row    # From loader
+                map_row = flipped_row - 1     # Because map_layout[0] = full_map[1]
+
+                # Ensure valid row for narrow maps
+                if 0 <= map_row < map_layout.shape[0] and col < map_layout.shape[1]:
+                    rom_data[col_offset + rom_row]      = map_layout[map_row, col, 0]
+                    rom_data[col_offset + 14 + rom_row] = map_layout[map_row, col, 1]
+                else:
+                    # Unused interior area → 0x00
+                    rom_data[col_offset + rom_row]      = 0x00
+                    rom_data[col_offset + 14 + rom_row] = 0x00
+
+    # Fill unused columns with 0x00
     for col in range(actual_width, map_width):
         col_offset = start_offset + (col * 28)
         for row in range(14):
