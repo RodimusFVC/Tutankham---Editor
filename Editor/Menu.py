@@ -3149,7 +3149,7 @@ def update_map_config_display(window):
         config = window.map_config[window.difficulty][window.selected_map]
         window.time_limit_var.set(str(config['time_limit']))
         window.spawn_rate_var.set(str(config['spawn_rate']))
-        width_value = config.get('map_width', 1)
+        width_value = config.get('map_width', 1)  #FIXME - This is not in config, it's in objects.....
         window.map_width_var.set(width_value)
         tile_count = (width_value + 1) * 16
         window.map_width_label.config(text=f"{tile_count} tiles")
