@@ -10,8 +10,9 @@ Install additional required packages (pip install -r requirements.txt)
 Must have your own copy of Tutankham game roms (Mame zipped version)
   - Only Konami version of the game is supported for editing
   - The current MAME zipped version should be placed in the folder with the editor
+    - This looks for the full merged zip - should contain roms for all 3 variants, if you want to use them
+    - The zip is treated as read-only, so you can always revert to your original, unmodified data
   - Modified files will be written in the same folder with the editor, unless otherwise specified
-  - The zip is treated as read-only, so you can always revert to your original, unmodified data
   - To play your newly created maps
     - Place a copy of Mame in the folder with the editor
     - Create a subfolder called 'tutankhm'
@@ -24,7 +25,6 @@ REMAINING TASKS
 --------------------------------------------------------------------------------
 
   - Decode Game Title Graphics / Add to UI Graphics Editor
-  - Support Stern/Bootleg
   - Enforce one Respawn per 'Screen' to avoid weird scrolling issues on death
   - Finish Decoding Stage Reference Data to allow changing of Stage/Difficulty Order
   - Add Editor for Animation / Display Animation Frames (Found, Not Added)
