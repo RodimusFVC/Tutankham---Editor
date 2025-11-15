@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v0.22"	# Editor Version Number
+EDITOR_VERSION = "v0.23"	# Editor Version Number
 open_windows = {			# Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -1022,7 +1022,12 @@ def load_object_data(map_index, difficulty=0):
         'player_start': {'y': 0, 'x': 0},
         'respawns': [],
         'map_width': 0,
-        'items': [],
+        'items': {
+            'rings': [],      # Slots 0-3, Max 4
+            'keys': [],       # Slots 4-7, Max 4
+            'keyholes': [],   # Slots 8-11, Max 4
+            'crowns': []      # Slots 12-13, Max 2
+        },
         'teleports': [],
         'spawns': []
     }
@@ -1049,15 +1054,49 @@ def load_object_data(map_index, difficulty=0):
     objects['map_width'] = read_byte_from_roms(pos)
     pos += 1
 
-    # Read items (14 × 16 bytes)
-    for i in range(NUM_ITEMS):
-        item = {
-            'active': read_byte_from_roms(pos) == 0x01,
-            'y': (read_byte_from_roms(pos + 5) << 8) | read_byte_from_roms(pos + 6),
-            'x': read_byte_from_roms(pos + 7),
-            'tile_id': read_byte_from_roms(pos + 15)
-        }
-        objects['items'].append(item)
+    # Read items (14 × 16 bytes) - strict slot ranges
+    # Slots 0-3: Rings
+    for i in range(4):
+        active = read_byte_from_roms(pos) == 0x01
+        y = (read_byte_from_roms(pos + 5) << 8) | read_byte_from_roms(pos + 6)
+        x = read_byte_from_roms(pos + 7)
+        
+        if active:
+            objects['items']['rings'].append({'y': y, 'x': x})
+        
+        pos += 16
+    
+    # Slots 4-7: Keys
+    for i in range(4):
+        active = read_byte_from_roms(pos) == 0x01
+        y = (read_byte_from_roms(pos + 5) << 8) | read_byte_from_roms(pos + 6)
+        x = read_byte_from_roms(pos + 7)
+        
+        if active:
+            objects['items']['keys'].append({'y': y, 'x': x})
+        
+        pos += 16
+    
+    # Slots 8-11: Keyholes
+    for i in range(4):
+        active = read_byte_from_roms(pos) == 0x01
+        y = (read_byte_from_roms(pos + 5) << 8) | read_byte_from_roms(pos + 6)
+        x = read_byte_from_roms(pos + 7)
+        
+        if active:
+            objects['items']['keyholes'].append({'y': y, 'x': x})
+        
+        pos += 16
+    
+    # Slots 12-13: Crowns
+    for i in range(2):
+        active = read_byte_from_roms(pos) == 0x01
+        y = (read_byte_from_roms(pos + 5) << 8) | read_byte_from_roms(pos + 6)
+        x = read_byte_from_roms(pos + 7)
+        
+        if active:
+            objects['items']['crowns'].append({'y': y, 'x': x})
+        
         pos += 16
     
     pos += 1  # Skip separator
@@ -1084,7 +1123,7 @@ def load_object_data(map_index, difficulty=0):
     return objects
 
 def save_object_data(objects, map_index, difficulty=0):
-    """Save object data back to ROM - handles ROM boundaries"""
+    """Save object data back to ROM - handles ROM boundaries with strict slot ranges"""
     block_number = (difficulty * 4) + map_index
     offset = OBJECT_BASE_OFFSET + (block_number * OBJECT_BLOCK_SIZE)
     
@@ -1106,17 +1145,81 @@ def save_object_data(objects, map_index, difficulty=0):
     write_byte_to_roms(pos, objects['map_width'])
     pos += 1
     
-    # Write items
-    for item in objects['items']:
-        write_byte_to_roms(pos, 0x01 if item['active'] else 0x00)
-        for i in range(1, 5):
-            write_byte_to_roms(pos + i, 0x00)
-        write_byte_to_roms(pos + 5, (item['y'] >> 8) & 0xFF)
-        write_byte_to_roms(pos + 6, item['y'] & 0xFF)
-        write_byte_to_roms(pos + 7, item['x'])
-        for i in range(8, 15):
-            write_byte_to_roms(pos + i, 0x00)
-        write_byte_to_roms(pos + 15, item['tile_id'])
+    # Write items in strict slot ranges
+    # Slots 0-3: Rings (0x6F) - pad to 4 slots
+    for i in range(4):
+        if i < len(objects['items']['rings']):
+            item = objects['items']['rings'][i]
+            write_byte_to_roms(pos, 0x01)  # Active
+            for j in range(1, 5):
+                write_byte_to_roms(pos + j, 0x00)
+            write_byte_to_roms(pos + 5, (item['y'] >> 8) & 0xFF)
+            write_byte_to_roms(pos + 6, item['y'] & 0xFF)
+            write_byte_to_roms(pos + 7, item['x'])
+            for j in range(8, 15):
+                write_byte_to_roms(pos + j, 0x00)
+            write_byte_to_roms(pos + 15, 0x6F)
+        else:
+            # Empty slot
+            for j in range(16):
+                write_byte_to_roms(pos + j, 0x00)
+        pos += 16
+    
+    # Slots 4-7: Keys (0x70) - pad to 4 slots
+    for i in range(4):
+        if i < len(objects['items']['keys']):
+            item = objects['items']['keys'][i]
+            write_byte_to_roms(pos, 0x01)  # Active
+            for j in range(1, 5):
+                write_byte_to_roms(pos + j, 0x00)
+            write_byte_to_roms(pos + 5, (item['y'] >> 8) & 0xFF)
+            write_byte_to_roms(pos + 6, item['y'] & 0xFF)
+            write_byte_to_roms(pos + 7, item['x'])
+            for j in range(8, 15):
+                write_byte_to_roms(pos + j, 0x00)
+            write_byte_to_roms(pos + 15, 0x70)
+        else:
+            # Empty slot
+            for j in range(16):
+                write_byte_to_roms(pos + j, 0x00)
+        pos += 16
+    
+    # Slots 8-11: Keyholes (0x72) - pad to 4 slots
+    for i in range(4):
+        if i < len(objects['items']['keyholes']):
+            item = objects['items']['keyholes'][i]
+            write_byte_to_roms(pos, 0x01)  # Active
+            for j in range(1, 5):
+                write_byte_to_roms(pos + j, 0x00)
+            write_byte_to_roms(pos + 5, (item['y'] >> 8) & 0xFF)
+            write_byte_to_roms(pos + 6, item['y'] & 0xFF)
+            write_byte_to_roms(pos + 7, item['x'])
+            for j in range(8, 15):
+                write_byte_to_roms(pos + j, 0x00)
+            write_byte_to_roms(pos + 15, 0x72)
+        else:
+            # Empty slot
+            for j in range(16):
+                write_byte_to_roms(pos + j, 0x00)
+        pos += 16
+    
+    # Slots 12-13: Crowns (0x62) - pad to 2 slots
+    for i in range(2):
+        if i < len(objects['items']['crowns']):
+            item = objects['items']['crowns'][i]
+            write_byte_to_roms(pos, 0x01)  # Active
+            for j in range(1, 5):
+                write_byte_to_roms(pos + j, 0x00)
+            write_byte_to_roms(pos + 5, (item['y'] >> 8) & 0xFF)
+            write_byte_to_roms(pos + 6, item['y'] & 0xFF)
+            write_byte_to_roms(pos + 7, item['x'])
+            for j in range(8, 15):
+                write_byte_to_roms(pos + j, 0x00)
+            write_byte_to_roms(pos + 15, 0x62)
+        else:
+            # Empty slot
+            for j in range(16):
+                write_byte_to_roms(pos + j, 0x00)
         pos += 16
     
     write_byte_to_roms(pos, 0x00)
@@ -1299,19 +1402,20 @@ def place_spawn_visualization_tiles(window):
                 if 0 <= row < map_height and 0 <= col < map_width:
                     write_visual_tile_to_cache(map_idx, row, col, 0x17)
         
-        # Place keyhole tiles
-        for item in objects['items']:
-            if item['active'] and item['tile_id'] == 0x72:
-                col = item['y'] // 0x08
-                row_from_bottom = item['x'] // 0x08
-                row = (map_height - 1) - row_from_bottom
-                if 0 <= row < map_height and 0 <= col < map_width:
-                    write_visual_tile_to_cache(map_idx, row, col, 0x72)
+        # Place keyhole tiles (from items)
+        for item in objects['items']['keyholes']:
+            col = item['y'] // 0x08
+            row_from_bottom = item['x'] // 0x08
+            row = (map_height - 1) - row_from_bottom
+            if 0 <= row < map_height and 0 <= col < map_width:
+                write_visual_tile_to_cache(map_idx, row, col, 0x72)
 
 def validate_filled_boxes(window):
     """Check for filled boxes on visual layer and fix them - writes directly to ROM cache"""
     for map_idx in range(num_maps):
         visual_map = load_visual_map_from_cache(map_idx)
+        objects = window.object_data[0][map_idx]
+        
         for row in range(map_height):
             for col in range(map_width):
                 tile = visual_map[row, col]
@@ -1320,9 +1424,13 @@ def validate_filled_boxes(window):
                     y = col * 0x08
                     
                     has_object = False
-                    for item in window.object_data[0][map_idx]['items']:
-                        if item['active'] and item['x'] == x and item['y'] == y:
-                            has_object = True
+                    # Check all item types
+                    for item_type in ['rings', 'keys', 'crowns']:
+                        for item in objects['items'][item_type]:
+                            if item['x'] == x and item['y'] == y:
+                                has_object = True
+                                break
+                        if has_object:
                             break
                     
                     if has_object:
@@ -1991,41 +2099,44 @@ def build_left_panel(window):
     
     # Object Counts
     ttk.Label(window.left_panel, text="Object Counts", 
-             font=('Arial', 10, 'bold')).pack(pady=5)
+            font=('Arial', 10, 'bold')).pack(pady=5)
     window.counter_frame = ttk.Frame(window.left_panel)
     window.counter_frame.pack(fill=tk.X, padx=5)
-    
+
     # Color-coded counters matching overlay colors
     window.player_start_label = tk.Label(window.counter_frame, text="Player Start: ✓", 
-                                         fg='lime', bg='#f0f0f0', anchor='w',
-                                         font=('Arial', 9))
+                                        fg='lime', bg='#f0f0f0', anchor='w',
+                                        font=('Arial', 9))
     window.player_start_label.pack(fill=tk.X, pady=1)
-    
+
     window.respawns_label = tk.Label(window.counter_frame, text="Respawns: 0/3", 
-                                     fg='orange', bg='#f0f0f0', anchor='w',
-                                     font=('Arial', 9))
+                                    fg='orange', bg='#f0f0f0', anchor='w',
+                                    font=('Arial', 9))
     window.respawns_label.pack(fill=tk.X, pady=1)
-    
+
     window.spawners_label = tk.Label(window.counter_frame, text="Enemy Spawns: 0/7", 
-                                     fg='red', bg='#f0f0f0', anchor='w',
-                                     font=('Arial', 9))
+                                    fg='red', bg='#f0f0f0', anchor='w',
+                                    font=('Arial', 9))
     window.spawners_label.pack(fill=tk.X, pady=1)
-    
+
     window.teleports_label = tk.Label(window.counter_frame, text="Teleports: 0/6", 
-                                      fg='magenta', bg='#f0f0f0', anchor='w',
-                                      font=('Arial', 9))
+                                    fg='magenta', bg='#f0f0f0', anchor='w',
+                                    font=('Arial', 9))
     window.teleports_label.pack(fill=tk.X, pady=1)
-    
-    window.items_label = tk.Label(window.counter_frame, text="Items: 0/14", 
-                                  fg='green', bg='#f0f0f0', anchor='w',
-                                  font=('Arial', 9))
+
+    # Items with detailed breakdown (multiline label with per-type limits)
+    window.items_label = tk.Label(window.counter_frame, 
+                                text="Items: 0/14\n  Rings: 0/4\n  Keys: 0/4\n  Keyholes: 0/4\n  Crowns: 0/2", 
+                                fg='green', bg='#f0f0f0', anchor='w',
+                                font=('Arial', 9),
+                                justify=tk.LEFT)
     window.items_label.pack(fill=tk.X, pady=1)
-    
+
     window.validation_label = tk.Label(window.counter_frame, text="", 
-                                       fg='red', bg='#f0f0f0',
-                                       font=('Arial', 8, 'bold'), anchor='w')
+                                    fg='red', bg='#f0f0f0',
+                                    font=('Arial', 8, 'bold'), anchor='w')
     window.validation_label.pack(fill=tk.X, pady=5)
-    
+        
     ttk.Separator(window.left_panel, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
     
     # Display Options
@@ -2356,31 +2467,36 @@ def place_tile(row, col, window):
         
         # Check if this tile requires an item object
         if window.selected_tile in ITEM_TILES:
-            # Convert to game coordinates
+            # Convert to game coordinates (YY YY XX format)
             row_from_bottom = (map_height - 1) - row
             x = row_from_bottom * 0x08
             y = col * 0x08
             
             objects = window.object_data[window.difficulty][window.selected_map]
             
-            # Check if we have room
-            active_items = sum(1 for item in objects['items'] if item['active'])
-            if active_items >= NUM_ITEMS:
+            # Define type-specific limits
+            item_limits = {
+                0x6F: (4, 'rings'),     # Max 4 rings
+                0x70: (4, 'keys'),      # Max 4 keys
+                0x72: (4, 'keyholes'),  # Max 4 keyholes
+                0x62: (2, 'crowns')     # Max 2 crowns
+            }
+            
+            max_count, item_type = item_limits[window.selected_tile]
+            current_count = len(objects['items'][item_type])
+            
+            if current_count >= max_count:
                 messagebox.showwarning("Limit Reached", 
-                    f"Maximum {NUM_ITEMS} items allowed")
+                    f"Maximum {max_count} {item_type} allowed per map")
                 # Remove the visual tile we just placed
                 write_visual_tile_to_cache(window.selected_map, row, col, empty_path_tile)
                 return
             
-            # Add item object
-            for item in objects['items']:
-                if not item['active']:
-                    item['active'] = True
-                    item['x'] = x
-                    item['y'] = y
-                    item['tile_id'] = window.selected_tile
-                    save_object_data(objects, window.selected_map, window.difficulty)
-                    break
+            # Add to appropriate item type list
+            item = {'y': y, 'x': x}
+            objects['items'][item_type].append(item)
+            
+            save_object_data(objects, window.selected_map, window.difficulty)
         
         mark_modified(window)
         render_map_view(window)
@@ -2580,16 +2696,17 @@ def on_map_right_click(event, window):
         
         objects = window.object_data[window.difficulty][window.selected_map]
         
-        # Check for items at this position
-        for item in objects['items']:
-            if item['active'] and item['x'] == x and item['y'] == y:
-                item['active'] = False
-                save_object_data(objects, window.selected_map, window.difficulty)
-                mark_modified(window)
-                window.status_var.set(f"Deleted item at ({col}, {row})")
-                render_map_view(window)
-                update_map_counters(window)
-                return
+        # Check for items at this position (check all types)
+        for item_type in ['rings', 'keys', 'keyholes', 'crowns']:
+            for i, item in enumerate(objects['items'][item_type]):
+                if item['x'] == x and item['y'] == y:
+                    objects['items'][item_type].pop(i)
+                    save_object_data(objects, window.selected_map, window.difficulty)
+                    mark_modified(window)
+                    window.status_var.set(f"Deleted {item_type[:-1]} at ({col}, {row})")
+                    render_map_view(window)
+                    update_map_counters(window)
+                    return
         
         # Check for respawns
         for i, respawn in enumerate(objects['respawns']):
@@ -2841,19 +2958,15 @@ def draw_objects_overlay(window):
             if 0 <= row < map_height and 0 <= col < map_width:
                 draw_sprite_overlay(ENEMY_SPAWN_MARKER_TILE, row, col, 'red', alpha=200)
     
-    # Items (colored outlines with appropriate sprites)
-    for item in objects['items']:
-        if item['active']:
+    # Items (all types with green outline for regular items, purple for keyholes)
+    for item_type, tile_id in [('rings', 0x6F), ('keys', 0x70), ('crowns', 0x62), ('keyholes', 0x72)]:
+        for item in objects['items'][item_type]:
             col = item['y'] // 0x08
             row_from_bottom = item['x'] // 0x08
             row = (map_height - 1) - row_from_bottom
             if 0 <= row < map_height and 0 <= col < map_width:
-                tile_id = item['tile_id']
-                # Keys: 0x70 (green), Treasures: 0x62 (green), Rings: 0x6F (green), Keyholes: 0x72 (purple)
-                if tile_id == 0x72:  # Keyhole gets purple outline
-                    draw_sprite_overlay(tile_id, row, col, 'magenta', alpha=200)
-                else:  # Keys, treasures, rings get green outline
-                    draw_sprite_overlay(tile_id, row, col, 'green', alpha=200)
+                outline = 'magenta' if tile_id == 0x72 else 'green'
+                draw_sprite_overlay(tile_id, row, col, outline, alpha=200)
     
     # Teleporters (magenta line connecting pairs, small pillar icons)
     for tp in objects['teleports']:
@@ -3069,8 +3182,20 @@ def update_map_counters(window):
     try:
         objects = window.object_data[window.difficulty][window.selected_map]
         
-        active_items = sum(1 for item in objects['items'] if item['active'])
-        window.items_label.config(text=f"Items: {active_items}/14")
+        # Count items by type
+        num_rings = len(objects['items']['rings'])
+        num_keys = len(objects['items']['keys'])
+        num_keyholes = len(objects['items']['keyholes'])
+        num_crowns = len(objects['items']['crowns'])
+        total_items = num_rings + num_keys + num_keyholes + num_crowns
+        
+        # Update items label with breakdown and limits
+        items_text = f"Items: {total_items}/14\n"
+        items_text += f"  Rings: {num_rings}/4\n"
+        items_text += f"  Keys: {num_keys}/4\n"
+        items_text += f"  Keyholes: {num_keyholes}/4\n"
+        items_text += f"  Crowns: {num_crowns}/2"
+        window.items_label.config(text=items_text)
         
         active_teleports = sum(1 for tp in objects['teleports'] if tp['y'] != 0)
         window.teleports_label.config(text=f"Teleports: {active_teleports}/6")
@@ -3082,11 +3207,8 @@ def update_map_counters(window):
         window.respawns_label.config(text=f"Respawns: {active_respawns}/3")
         
         # Validate keys vs keyholes
-        keys = sum(1 for item in objects['items'] if item['active'] and item['tile_id'] == 0x70)
-        keyholes = sum(1 for item in objects['items'] if item['active'] and item['tile_id'] == 0x72)
-        
-        if keyholes > keys:
-            window.validation_label.config(text=f"⚠ WARNING: {keyholes} keyholes but only {keys} keys!")
+        if num_keyholes > num_keys:
+            window.validation_label.config(text=f"⚠ WARNING: {num_keyholes} keyholes but only {num_keys} keys!")
         else:
             window.validation_label.config(text="")
             
