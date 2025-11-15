@@ -37,8 +37,8 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v0.25"	# Editor Version Number
-open_windows = {			# Window Tracking - ensure only one instance of each editor
+EDITOR_VERSION = "v1.00-RC1"    # Editor Version Number
+open_windows = {			    # Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
     'font_editor': None,
@@ -46,7 +46,7 @@ open_windows = {			# Window Tracking - ensure only one instance of each editor
     'treasure_editor': None,
     'high_score': None,
     'palette': None}
-state_callbacks = {         # Callback registry for cross-window updates
+state_callbacks = {             # Callback registry for cross-window updates
     'palette_changed': [],
     'tile_changed': [],
     'font_changed': []
