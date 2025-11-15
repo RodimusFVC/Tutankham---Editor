@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v0.23"	# Editor Version Number
+EDITOR_VERSION = "v0.25"	# Editor Version Number
 open_windows = {			# Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -383,18 +383,498 @@ FONT_NAMES = {
     42: "Z"
 }
 PALETTE_NAMES = [
-    "Map 1 Colors",
-    "Map 2 Colors", 
-    "Map 3 Colors",
-    "Map 4 Colors",
-    "Unknown 1",
-    "Unknown 2",
-    "Unknown 3"
+    "Map 1",
+    "Map 2", 
+    "Map 3",
+    "Map 4",
+    "High Score",
+    "Title Screen",
+    "Player Start"
 ]
 
 #########################################
 # Code Starts Here
 #########################################
+
+#########################################
+# Pixel Editor Class
+#########################################
+
+class PixelEditor:
+    """Unified pixel editor for tiles, fonts, UI graphics, and treasures"""
+    
+    def __init__(self, graphic_type, graphic_id, name, width, height, mode, rom_name, offset, 
+                 palette_idx=0, rotate=False, bytes_per_row=None):
+        """
+        Initialize pixel editor
+        
+        Args:
+            graphic_type: 'tile', 'font', 'ui', 'treasure'
+            graphic_id: Identifier (tile 0x6F, font 12, etc.) - can be None for UI/treasures
+            name: Display name
+            width: Pixel width
+            height: Pixel height
+            mode: 'tile' or 'sprite'
+            rom_name: Which ROM file (e.g. 'c1.1i', 'j6.6h')
+            offset: Byte offset in ROM
+            palette_idx: Which palette to use (0-6)
+            rotate: Whether to rotate 90° after loading
+            bytes_per_row: For sprite mode (optional)
+        """
+        self.graphic_type = graphic_type
+        self.graphic_id = graphic_id
+        self.name = name
+        self.width = width
+        self.height = height
+        self.mode = mode
+        self.rom_name = rom_name
+        self.offset = offset
+        self.palette_idx = palette_idx
+        self.rotate = rotate
+        self.bytes_per_row = bytes_per_row
+        
+        # Editor state
+        self.zoom = 20  # Default 10x zoom
+        self.selected_color = 15  # Default to white
+        self.pixels = None
+        self.palette = None
+        
+        # Window reference
+        self.window = None
+        self.canvas = None
+        self.canvas_image = None
+        
+        # Load initial data
+        self.load_pixels()
+        self.load_palette()
+    
+    def load_pixels(self):
+        """Load pixel data from ROM cache"""
+        rom_data = rom_cache[self.rom_name]
+        self.pixels = extract_pixels(rom_data, self.offset, self.height, self.width, 
+                                    self.mode, self.bytes_per_row)
+        
+        if self.rotate:
+            self.pixels = np.rot90(self.pixels, k=1)
+
+        # Special handling for fonts - remap color 15 (black) to 3 (grey) for visibility
+        if self.graphic_type == 'font':
+            self.pixels = self.pixels.copy()
+            self.pixels[self.pixels == 15] = 3
+
+        logging.info(f"Loaded {self.name}: {self.pixels.shape}")
+    
+    def load_palette(self):
+        """Load palette from ROM cache"""
+        palettes = load_palettes_from_rom()
+        self.palette = palettes[self.palette_idx]
+    
+    def show(self):
+        """Create and show the editor window"""
+        self.window = tk.Toplevel()
+        self.window.title(f"Edit: {self.name}")
+        
+        # Calculate window size
+        canvas_width = self.width * self.zoom
+        canvas_height = self.height * self.zoom
+
+        # Account for rotated dimensions
+        if self.rotate:
+            canvas_width, canvas_height = canvas_height, canvas_width
+
+        # Ensure minimum height for color palette (15 colors × ~35px each + controls)
+        palette_height = (15 * 35) + 150  # Colors + selected display + padding
+        window_width = canvas_width + 360  # Extra space for color palette
+        window_height = max(canvas_height + 100, palette_height + 150)
+        
+        self.window.geometry(f"{window_width}x{window_height}")
+        
+        # Main container
+        main_frame = ttk.Frame(self.window, padding=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        title_label = ttk.Label(main_frame, text=self.name, font=('Arial', 14, 'bold'))
+        title_label.pack(pady=5)
+        
+        # Info label
+        info_text = f"{self.width}×{self.height} pixels | {self.mode} mode | Palette {self.palette_idx}"
+        info_label = ttk.Label(main_frame, text=info_text, font=('Arial', 9))
+        info_label.pack(pady=2)
+        
+        # Content frame (canvas + color palette side by side)
+        content_frame = ttk.Frame(main_frame)
+        content_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        # Canvas frame
+        canvas_frame = ttk.LabelFrame(content_frame, text="Graphic Editor", padding=5)
+        canvas_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Canvas for pixel editing
+        self.canvas = tk.Canvas(canvas_frame, width=canvas_width, height=canvas_height,
+                               bg='#2b2b2b', cursor='crosshair')
+        self.canvas.pack()
+        
+        # Bind click events (TODO: implement pixel editing)
+        self.canvas.bind('<Button-1>', lambda e: self.on_pixel_click(e))
+        self.canvas.bind('<B1-Motion>', lambda e: self.on_pixel_drag(e))
+        self.canvas.bind('<Button-3>', lambda e: self.on_pixel_right_click(e))
+        self.canvas.bind('<B3-Motion>', lambda e: self.on_pixel_right_click(e))
+        
+        # Color palette frame
+        palette_frame = ttk.LabelFrame(content_frame, text="Color Palette", padding=5)
+        palette_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        
+        self.build_color_palette(palette_frame)
+        
+        # Control buttons at bottom
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Button(button_frame, text="Close", command=self.window.destroy).pack(side=tk.RIGHT, padx=5)
+        
+        # Initial render
+        self.render_canvas()
+        
+        logging.info(f"Opened pixel editor for {self.name}")
+    
+    def build_color_palette(self, parent):
+        """Build the color selection palette with palette switcher"""
+        
+        # Palette selector at top
+        palette_select_frame = ttk.Frame(parent)
+        palette_select_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(palette_select_frame, text="Palette:", font=('Arial', 9, 'bold')).pack(side=tk.TOP, pady=2)
+        
+        # Don't use textvariable - just track the dropdown directly
+        self.palette_dropdown = ttk.Combobox(palette_select_frame, 
+                                            values=PALETTE_NAMES,
+                                            state="readonly", 
+                                            width=15)
+        self.palette_dropdown.current(self.palette_idx)
+        self.palette_dropdown.pack(side=tk.TOP, pady=2)
+        self.palette_dropdown.bind("<<ComboboxSelected>>", lambda e: self.change_palette())
+        
+        ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+        
+        # Only show color selection for non-fonts
+        if self.graphic_type != 'font':
+            # Color selection label
+            ttk.Label(parent, text="Click to select color:", font=('Arial', 9)).pack(pady=5)
+            
+            # Frame for colors
+            self.color_swatches_frame = ttk.Frame(parent)
+            self.color_swatches_frame.pack(fill=tk.BOTH, expand=True)
+            
+            # Build color swatches
+            self.rebuild_color_swatches()
+            
+            ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+            
+            # Selected color indicator
+            self.selected_color_frame = ttk.LabelFrame(parent, text="Selected Color", padding=5)
+            self.selected_color_frame.pack(fill=tk.X, pady=5)
+            
+            self.selected_color_display = tk.Canvas(self.selected_color_frame, 
+                                                    width=60, height=60,
+                                                    bg='white', highlightthickness=2,
+                                                    highlightbackground='black')
+            self.selected_color_display.pack()
+            
+            self.update_selected_color_display()
+        else:
+            # For fonts, show info message instead
+            info_frame = ttk.LabelFrame(parent, text="Font Editing", padding=10)
+            info_frame.pack(fill=tk.X, pady=10)
+            
+            ttk.Label(info_frame, 
+                    text="Fonts use only:\n• Color 0 (background)\n• Color 3 (foreground)\n\nChange palettes above\nto preview different colors.",
+                    font=('Arial', 9),
+                    justify=tk.LEFT).pack()
+        
+    def rebuild_color_swatches(self):
+        """Rebuild color swatches with current palette in 2-column grid"""
+        # Skip for fonts - they don't have color selection
+        if self.graphic_type == 'font':
+            return
+        
+        # Clear existing swatches
+        for widget in self.color_swatches_frame.winfo_children():
+            widget.destroy()
+        
+        # Create color swatches (0-14) in 2-column grid, skipping 0 and 15
+        # Colors to show: 1-14 (14 colors total = 7 rows × 2 columns)
+        colors_to_show = list(range(0, 15))  # Skip 0 (background) and 15 (always black)
+        
+        for idx, color_idx in enumerate(colors_to_show):
+            row = idx // 2
+            col = idx % 2
+            
+            # Create frame for this color
+            color_frame = ttk.Frame(self.color_swatches_frame)
+            color_frame.grid(row=row, column=col, padx=5, pady=3, sticky='w')
+            
+            # Get RGB values
+            r, g, b = self.palette[color_idx][1], self.palette[color_idx][2], self.palette[color_idx][3]
+            hex_color = f'#{r:02x}{g:02x}{b:02x}'
+            
+            # Color swatch
+            swatch = tk.Canvas(color_frame, width=35, height=35, 
+                            bg=hex_color, highlightthickness=2,
+                            highlightbackground='gray', cursor='hand2')
+            swatch.pack(side=tk.LEFT, padx=5)
+            swatch.bind('<Button-1>', lambda e, c=color_idx: self.select_color(c))
+            
+            # Label
+            ttk.Label(color_frame, text=f"Color {color_idx}", 
+                    font=('Arial', 9)).pack(side=tk.LEFT, padx=5)
+
+    def change_palette(self):
+        """Change the palette and re-render"""
+        # Get the selected index from the combobox
+        new_palette_idx = self.palette_dropdown.current()
+        self.palette_idx = new_palette_idx
+        self.load_palette()
+        self.rebuild_color_swatches()
+        self.update_selected_color_display()
+        self.render_canvas()
+        logging.info(f"Changed to palette {new_palette_idx}: {PALETTE_NAMES[new_palette_idx]}")
+    
+    def select_color(self, color_idx):
+        """Select a color for drawing"""
+        self.selected_color = color_idx
+        self.update_selected_color_display()
+        logging.info(f"Selected color {color_idx}")
+    
+    def update_selected_color_display(self):
+        """Update the selected color display"""
+        # Skip for fonts
+        if self.graphic_type == 'font':
+            return
+        
+        r, g, b = self.palette[self.selected_color][1], self.palette[self.selected_color][2], self.palette[self.selected_color][3]
+        hex_color = f'#{r:02x}{g:02x}{b:02x}'
+        self.selected_color_display.configure(bg=hex_color)
+    
+    def render_canvas(self):
+        """Render the current pixel data to canvas"""
+        # Apply palette to pixels
+        color_graphic = apply_palette_to_tile(self.pixels, self.palette)
+        
+        # Scale to zoom level
+        graphic_scaled = np.repeat(np.repeat(color_graphic, self.zoom, axis=0), self.zoom, axis=1)
+        graphic_rgb = graphic_scaled[:, :, :3]
+        
+        # Convert to image
+        img = Image.fromarray(graphic_rgb.astype('uint8')).convert('RGB')
+        self.canvas_image = ImageTk.PhotoImage(img)
+        
+        # Draw on canvas
+        self.canvas.delete('all')
+        self.canvas.create_image(0, 0, image=self.canvas_image, anchor='nw')
+        
+        # Draw grid
+        self.draw_grid()
+    
+    def draw_grid(self):
+        """Draw pixel grid overlay"""
+        height, width = self.pixels.shape
+        
+        # Vertical lines
+        for x in range(width + 1):
+            x_pos = x * self.zoom
+            self.canvas.create_line(x_pos, 0, x_pos, height * self.zoom, 
+                                   fill='#444444', width=1)
+        
+        # Horizontal lines
+        for y in range(height + 1):
+            y_pos = y * self.zoom
+            self.canvas.create_line(0, y_pos, width * self.zoom, y_pos, 
+                                   fill='#444444', width=1)
+    
+    def on_pixel_click(self, event):
+        """Handle pixel click - left click draws"""
+        # Convert canvas coordinates to pixel coordinates
+        px = event.x // self.zoom
+        py = event.y // self.zoom
+        
+        height, width = self.pixels.shape
+        
+        if 0 <= px < width and 0 <= py < height:
+            if self.graphic_type == 'font':
+                # Fonts: always draw color 3 (foreground, saves as 15)
+                self.pixels[py, px] = 3
+                logging.info(f"Drew foreground at pixel ({px}, {py})")
+            else:
+                # Other graphics: use selected color
+                self.pixels[py, px] = self.selected_color
+                logging.info(f"Set pixel ({px}, {py}) to color {self.selected_color}")
+            
+            # Save and Render
+            self.write_pixels_to_rom()
+            self.render_canvas()
+
+    def on_pixel_right_click(self, event):
+        """Handle pixel right-click - erases to background"""
+        # Convert canvas coordinates to pixel coordinates
+        px = event.x // self.zoom
+        py = event.y // self.zoom
+        
+        height, width = self.pixels.shape
+        
+        if 0 <= px < width and 0 <= py < height:
+            # Erase to background (color 0) for all graphic types
+            self.pixels[py, px] = 0
+            logging.info(f"Erased pixel ({px}, {py}) to background")
+            
+            # Save and Render
+            self.write_pixels_to_rom()
+            self.render_canvas()
+
+    def on_pixel_drag(self, event):
+        """Handle pixel drag - same as click"""
+        self.on_pixel_click(event)
+
+    def write_pixels_to_rom(self):
+        """Write current pixel data back to ROM cache"""
+        
+        # Make a copy for writing
+        pixels_to_write = self.pixels.copy()
+        
+        # Special handling for fonts - remap color 3 (grey) back to 15 (black)
+        if self.graphic_type == 'font':
+            pixels_to_write[pixels_to_write == 3] = 15
+        
+        # Reverse rotation if needed
+        if self.rotate:
+            pixels_to_write = np.rot90(pixels_to_write, k=-1)  # Rotate back (counter-clockwise)
+        
+        # Get ROM data reference
+        rom_data = rom_cache[self.rom_name]
+        
+        # Convert pixels back to ROM format based on mode
+        if self.mode == 'tile':
+            # Tile mode: row-major, 4bpp interleaved nibbles
+            bytes_per_row = self.width // 2
+            
+            for y in range(self.height):
+                for x in range(0, self.width, 2):
+                    # Pack two pixels into one byte (low nibble, high nibble)
+                    byte_val = (pixels_to_write[y, x] & 0x0F) | ((pixels_to_write[y, x + 1] & 0x0F) << 4)
+                    byte_offset = self.offset + (y * bytes_per_row) + (x // 2)
+                    rom_data[byte_offset] = byte_val
+        
+        elif self.mode == 'sprite':
+            # Sprite mode: interleaved scanlines
+            bytes_per_row = self.bytes_per_row if self.bytes_per_row else (self.width // 2)
+            
+            for y in range(self.height):
+                pair_idx = y // 2
+                base = self.offset + (pair_idx * bytes_per_row)
+                half = 0 if (y % 2 == 0) else (bytes_per_row // 2)
+                
+                for x in range(0, self.width, 2):
+                    # Pack two pixels into one byte (low nibble, high nibble)
+                    byte_val = (pixels_to_write[y, x] & 0x0F) | ((pixels_to_write[y, x + 1] & 0x0F) << 4)
+                    byte_offset = base + half + (x // 2)
+                    rom_data[byte_offset] = byte_val
+        
+        # Trigger callback for other windows to refresh
+        if self.graphic_type == 'tile':
+            trigger_callback('tile_changed', self.graphic_id)
+        elif self.graphic_type == 'font':
+            trigger_callback('font_changed', self.graphic_id)
+        
+        logging.info(f"Wrote {self.name} to ROM at offset 0x{self.offset:04X}")
+
+def open_pixel_editor(graphic_type, graphic_id=None, config=None, palette_idx=0):
+    """
+    Unified pixel editor launcher
+    
+    Args:
+        graphic_type: 'tile', 'font', 'ui', 'treasure'
+        graphic_id: Hex ID (0x6F for tiles, 12 for fonts, etc.)
+        config: Dict with config (for UI/treasures that have it pre-defined)
+        palette_idx: Which palette to use (0-6)
+    """
+    
+    # Build editor config based on type
+    if graphic_type == 'tile':
+        rom_index = graphic_id // 32
+        tile_in_rom = graphic_id % 32
+        
+        editor = PixelEditor(
+            graphic_type='tile',
+            graphic_id=graphic_id,
+            name=get_tile_name(graphic_id),
+            width=16,
+            height=16,
+            mode='tile',
+            rom_name=ROM_CONFIG['tile_roms'][rom_index],
+            offset=tile_in_rom * tile_size,
+            palette_idx=palette_idx,
+            rotate=True
+        )
+    
+    elif graphic_type == 'font':
+        # Calculate font offset
+        if graphic_id < 10:  # Digits
+            offset = graphic_id * 32
+        elif graphic_id < 17:  # Special chars
+            offset = 0x0140 + ((graphic_id - 10) * 32)
+        else:  # Letters
+            offset = 0x0220 + ((graphic_id - 17) * 32)
+    
+        editor = PixelEditor(
+            graphic_type='font',
+            graphic_id=graphic_id,
+            name=get_font_name(graphic_id),
+            width=8,
+            height=8,
+            mode='tile',
+            rom_name='j6.6h',
+            offset=offset,
+            palette_idx=palette_idx,
+            rotate=True
+        )
+    
+    elif graphic_type == 'ui':
+        editor = PixelEditor(
+            graphic_type='ui',
+            graphic_id=config.get('description', 'UI Graphic'),
+            name=config['description'],
+            width=config['width'],
+            height=config['height'],
+            mode=config['mode'],
+            rom_name=config['rom'],
+            offset=config['offset'],
+            palette_idx=palette_idx,
+            rotate=config.get('rotate', False),
+            bytes_per_row=config.get('bytes_per_row')
+        )
+    
+    elif graphic_type == 'treasure':
+        editor = PixelEditor(
+            graphic_type='treasure',
+            graphic_id=config.get('description', 'Treasure'),
+            name=config['description'],
+            width=config['width'],
+            height=config['height'],
+            mode=config['mode'],
+            rom_name=config['rom'],
+            offset=config['offset'],
+            palette_idx=palette_idx,
+            rotate=config.get('rotate', False),
+            bytes_per_row=config.get('bytes_per_row')
+        )
+    
+    else:
+        logging.error(f"Unknown graphic type: {graphic_type}")
+        return
+    
+    # Show the editor
+    editor.show()
 
 #########################################
 # Main Functions
@@ -2400,10 +2880,11 @@ def place_object_marker(row, col, window):
                 return
             
             # Add respawn
-            for respawn in objects['respawns']:
+            for i, respawn in enumerate(objects['respawns']):
                 if respawn['y'] == 0:  # Empty slot
                     respawn['x'] = x
                     respawn['y'] = y
+                    save_object_data(objects, window.selected_map, window.difficulty)
                     break
             
             mark_modified(window)
@@ -2462,10 +2943,7 @@ def place_tile(row, col, window):
                 "This tile is part of the door. Use drag-and-drop to move the door.")
             return
         
-        # Write visual tile directly to cache
-        write_visual_tile_to_cache(window.selected_map, row, col, window.selected_tile)
-        
-        # Check if this tile requires an item object
+        # Check if this tile requires an item object FIRST
         if window.selected_tile in ITEM_TILES:
             # Convert to game coordinates (YY YY XX format)
             row_from_bottom = (map_height - 1) - row
@@ -2488,15 +2966,20 @@ def place_tile(row, col, window):
             if current_count >= max_count:
                 messagebox.showwarning("Limit Reached", 
                     f"Maximum {max_count} {item_type} allowed per map")
-                # Remove the visual tile we just placed
-                write_visual_tile_to_cache(window.selected_map, row, col, empty_path_tile)
                 return
+            
+            # Write the EMPTY visual tile (not the filled one)
+            empty_tile = ITEM_TILES[window.selected_tile]
+            write_visual_tile_to_cache(window.selected_map, row, col, empty_tile)
             
             # Add to appropriate item type list
             item = {'y': y, 'x': x}
             objects['items'][item_type].append(item)
             
             save_object_data(objects, window.selected_map, window.difficulty)
+        else:
+            # Regular tile - write as-is
+            write_visual_tile_to_cache(window.selected_map, row, col, window.selected_tile)
         
         mark_modified(window)
         render_map_view(window)
@@ -2940,7 +3423,7 @@ def draw_objects_overlay(window):
             draw_sprite_overlay(PLAYER_START_MARKER_TILE, row, col, 'lime', alpha=220)
     
     # Respawns (orange outline, 0x17 flame sprite)
-    for i in range(2):
+    for i in range(NUM_RESPAWNS):
         respawn = objects['respawns'][i]
         if respawn['y'] != 0:
             col = respawn['y'] // 0x08
@@ -3441,14 +3924,17 @@ def rebuild_ui_graphic_display(window):
     # Add click handler for future editing
     canvas.bind('<Button-1>', lambda e: open_ui_graphic_editor(window, graphic_name))
     
-    window.ui_status_label.config(text=f"Displaying: {graphic_name} - Click to edit (coming soon)")
+    window.ui_status_label.config(text=f"Displaying: {graphic_name} - Click To Edit")
 
 def open_ui_graphic_editor(window, graphic_name):
     """Open pixel editor for a UI graphic"""
-    # TODO: Implement pixel-level editor
-    messagebox.showinfo("UI Graphics Editor", 
-                       f"Pixel editor for {graphic_name} coming soon!\n\n"
-                       f"This will allow you to edit individual pixels.")
+    config = UI_GRAPHICS_CONFIG.get(graphic_name)
+    if not config:
+        messagebox.showerror("Error", "Configuration not found")
+        return
+    
+    palette_idx = window._palette_dropdown.current()
+    open_pixel_editor('ui', config=config, palette_idx=palette_idx)
 
 #########################################
 # Treasure Graphics Editor Functions
@@ -3594,15 +4080,17 @@ def rebuild_treasure_display(window):
     # Add click handler for future editing
     canvas.bind('<Button-1>', lambda e: open_treasure_editor(window, treasure_name))
     
-    window.treasure_status_label.config(text=f"Displaying: {treasure_name} - Click to edit (coming soon)")
+    window.treasure_status_label.config(text=f"Displaying: {treasure_name} - Click To Edit")
 
 def open_treasure_editor(window, treasure_name):
     """Open pixel editor for a treasure graphic"""
-    # TODO: Implement pixel-level editor
-    messagebox.showinfo("Treasure Editor", 
-                       f"Pixel editor for {treasure_name} coming soon!\n\n"
-                       f"This will allow you to edit individual pixels.")
-
+    config = TREASURE_GRAPHICS_CONFIG.get(treasure_name)
+    if not config:
+        messagebox.showerror("Error", "Configuration not found")
+        return
+    
+    palette_idx = window._palette_dropdown.current()
+    open_pixel_editor('treasure', config=config, palette_idx=palette_idx)
 
 #########################################
 # Font Editor Functions
@@ -3730,36 +4218,9 @@ def rebuild_font_grid(window):
     logging.info(f"Rebuilt font grid with {len(window.fonts)} characters using palette {palette_idx}")
 
 def open_font_editor(window, font_idx):
-    """Open font editor dialog for a specific character"""
-    # Get current palette
+    """Open pixel editor for a font character"""
     palette_idx = window._palette_dropdown.current()
-    palette = window.palettes[palette_idx]  # Use window-local palette
-    
-    # Create dialog
-    dialog = tk.Toplevel(window)
-    dialog.title(f"Edit Font Character: {get_font_name(font_idx)}")
-    dialog.geometry("400x500")
-    dialog.transient(window)
-    dialog.update_idletasks()
-    dialog.grab_set()
-    
-    main_frame = ttk.Frame(dialog, padding=10)
-    main_frame.pack(fill=tk.BOTH, expand=True)
-    
-    # Title
-    ttk.Label(main_frame, 
-             text=f"Character: {get_font_name(font_idx)}",
-             font=('Arial', 12, 'bold')).pack(pady=10)
-    
-    # TODO: Add 8x8 pixel editor canvas here (64x64 pixels, 8x zoom)
-    # TODO: Add color palette selector
-    # TODO: Add save/cancel buttons
-    
-    ttk.Label(main_frame, text="Font editor coming next...", 
-             font=('Arial', 10, 'italic')).pack(pady=50)
-    
-    ttk.Button(main_frame, text="Close", 
-              command=dialog.destroy).pack(pady=10)
+    open_pixel_editor('font', graphic_id=font_idx, palette_idx=palette_idx)
 
 #########################################
 # Map Tile Editor Functions
@@ -3881,36 +4342,9 @@ def rebuild_tile_grid(window):
     logging.info(f"Rebuilt tile grid with {len(window.tiles)} tiles using palette {palette_idx}")
 
 def open_tile_editor(window, tile_idx):
-    """Open tile editor dialog for a specific tile"""
-    # Get current palette
+    """Open pixel editor for a specific tile"""
     palette_idx = window._palette_dropdown.current()
-    palette = window.palettes[palette_idx]  # Use window-local palette
-    
-    # Create dialog
-    dialog = tk.Toplevel(window)
-    dialog.title(f"Edit Tile 0x{tile_idx:02X} - {get_tile_name(tile_idx)}")
-    dialog.geometry("400x500")
-    dialog.transient(window)
-    dialog.update_idletasks()
-    dialog.grab_set()
-    
-    main_frame = ttk.Frame(dialog, padding=10)
-    main_frame.pack(fill=tk.BOTH, expand=True)
-    
-    # Title
-    ttk.Label(main_frame, 
-             text=f"Tile 0x{tile_idx:02X}: {get_tile_name(tile_idx)}",
-             font=('Arial', 12, 'bold')).pack(pady=10)
-    
-    # TODO: Add pixel editor canvas here (160x160 pixels, 10x zoom)
-    # TODO: Add color palette selector
-    # TODO: Add save/cancel buttons
-    
-    ttk.Label(main_frame, text="Tile editor coming next...", 
-             font=('Arial', 10, 'italic')).pack(pady=50)
-    
-    ttk.Button(main_frame, text="Close", 
-              command=dialog.destroy).pack(pady=10)
+    open_pixel_editor('tile', graphic_id=tile_idx, palette_idx=palette_idx)
 
 #########################################
 # High Score Editor Functions
