@@ -4,19 +4,32 @@ GUI Based ROM Editor - written in Python/TK for Portability
 --------------------------------------------------------------------------------
 INSTRUCTIONS
 --------------------------------------------------------------------------------
+
 Python should be installed/working (this project was developed with Python 3.13.7)
 Install additional required packages (pip install -r requirements.txt)
 Must have your own copy of Tutankham game roms (Mame zipped version)
   - Only Konami version of the game is supported for editing
   - The current MAME zipped version should be placed in the folder with the editor
   - Modified files will be written in the same folder with the editor, unless otherwise specified
-  - The original zip is treated read-only, so you can always return to your prior version
+  - The zip is treated as read-only, so you can always revert to your original, unmodified data
   - To play your newly created maps
     - Place a copy of Mame in the folder with the editor
     - Create a subfolder called 'tutankhm'
     - Extract the mame zip to this 'tutankhm' folder, so the sound roms are also available for use
     - Save your modified roms to this 'tutankhm' folder
     - run mame with some variation of : mame -window tutankhm -rompath .
+
+--------------------------------------------------------------------------------
+REMAINING TASKS
+--------------------------------------------------------------------------------
+
+  - Decode Game Title Graphics / Add to UI Graphics Editor
+  - Support Stern/Bootleg
+  - Enforce one Respawn per 'Screen' to avoid weird scrolling issues on death
+  - Finish Decoding Stage Reference Data to allow changing of Stage/Difficulty Order
+  - Add Editor for Animation / Display Animation Frames (Found, Not Added)
+  - Update MemoryMap.txt with new findings
+  - Fix Bugs
 
 --------------------------------------------------------------------------------
 CREDITS
