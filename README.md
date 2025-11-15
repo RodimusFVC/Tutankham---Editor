@@ -5,9 +5,10 @@ GUI Based ROM Editor - written in Python/TK for Portability
 INSTRUCTIONS
 --------------------------------------------------------------------------------
 
-Python should be installed/working 
+Python should be installed/working
   - This project was developed with Python 3.13.7
   - Install additional required packages via 'pip install -r requirements.txt'
+
 Must have your own copy of Tutankham game roms (Mame zipped version)
   - The current MAME zipped version should be placed in the folder with the editor
     - Editor looks for the full merged zip
