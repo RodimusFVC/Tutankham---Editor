@@ -161,7 +161,7 @@ ITEM_TILES = {
     0x62: 0x4A,  # Crown -> bottom-accessible box
     0x6F: 0x21,  # Ring -> top-accessible box
     0x70: 0x22,  # Key -> side-accessible box
-    0x72: None   # Keyhole -> no constraint
+    0x72: 0x26   # Keyhole -> opens to blank space
 }
 # Empty to filled box mapping
 EMPTY_TO_FILLED = {
@@ -2282,7 +2282,8 @@ def place_object_marker(row, col, window):
         
         if window.selected_object_type == 'respawn':
             # Check if we have room
-            if respawn.count >= NUM_RESPAWNS:
+            active_respawns = sum(1 for respawn in objects['respawns'] if respawn['y'] != 0)
+            if active_respawns >= NUM_RESPAWNS:
                 messagebox.showwarning("Limit Reached", 
                     f"Maximum {NUM_RESPAWNS} respawn points allowed")
                 return
@@ -2352,8 +2353,38 @@ def place_tile(row, col, window):
         
         # Write visual tile directly to cache
         write_visual_tile_to_cache(window.selected_map, row, col, window.selected_tile)
+        
+        # Check if this tile requires an item object
+        if window.selected_tile in ITEM_TILES:
+            # Convert to game coordinates
+            row_from_bottom = (map_height - 1) - row
+            x = row_from_bottom * 0x08
+            y = col * 0x08
+            
+            objects = window.object_data[window.difficulty][window.selected_map]
+            
+            # Check if we have room
+            active_items = sum(1 for item in objects['items'] if item['active'])
+            if active_items >= NUM_ITEMS:
+                messagebox.showwarning("Limit Reached", 
+                    f"Maximum {NUM_ITEMS} items allowed")
+                # Remove the visual tile we just placed
+                write_visual_tile_to_cache(window.selected_map, row, col, empty_path_tile)
+                return
+            
+            # Add item object
+            for item in objects['items']:
+                if not item['active']:
+                    item['active'] = True
+                    item['x'] = x
+                    item['y'] = y
+                    item['tile_id'] = window.selected_tile
+                    save_object_data(objects, window.selected_map, window.difficulty)
+                    break
+        
         mark_modified(window)
         render_map_view(window)
+        update_map_counters(window)
         window.status_var.set(f"Placed tile 0x{window.selected_tile:02X} at ({col}, {row})")
         
     except Exception as e:
