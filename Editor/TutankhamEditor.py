@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v1.00-RC1"    # Editor Version Number
+EDITOR_VERSION = "v1.00-RC2"    # Editor Version Number
 open_windows = {			    # Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -68,22 +68,87 @@ ROM_CONFIG = {
     'high_score_rom': 'm1.1h',
     'palette_rom': 'm1.1h',}
 # All ROM files with paths
-ROM_FILES = {
-    'c1.1i': './c1.1i',
-    'c2.2i': './c2.2i',
-    'c3.3i': './c3.3i',
-    'c4.4i': './c4.4i',
-    'c5.5i': './c5.5i',
-    'c6.6i': './c6.6i',
-    'c7.7i': './c7.7i',
-    'c8.8i': './c8.8i',
-    'c9.9i': './c9.9i',
-    'm1.1h': './m1.1h',
-    'm2.2h': './m2.2h',
-    'm4.4h': './m4.4h',
-    'm5.5h': './m5.5h',
-    '3j.3h': './3j.3h',
-    'j6.6h': './j6.6h',}
+
+CURRENT_ROM_SET = 'Konami'
+ROM_SETS = {
+    'Konami': {
+        'name': 'Konami (Original)',
+        'notes': [
+            'Original Japanese release',
+            'Copyright: © 1982 KONAMI',
+        ],
+        'files': {
+            'c1.1i': './c1.1i',
+            'c2.2i': './c2.2i',
+            'c3.3i': './c3.3i',
+            'c4.4i': './c4.4i',
+            'c5.5i': './c5.5i',
+            'c6.6i': './c6.6i',
+            'c7.7i': './c7.7i',
+            'c8.8i': './c8.8i',
+            'c9.9i': './c9.9i',
+            'm1.1h': './m1.1h',
+            'm2.2h': './m2.2h',
+            'm4.4h': './m4.4h',
+            'm5.5h': './m5.5h',
+            '3j.3h': './3j.3h',
+            'j6.6h': './j6.6h',
+        }
+    },
+    'Stern': {
+        'name': 'Stern Electronics (US)',
+        'notes': [
+            'Licensed US release by Stern Electronics',
+            'Copyright: © 1982 KONAMI / STERN ELECTRONICS',
+            'Differences in copyright graphic and checksum'
+        ],    
+        'files': {
+            'c1.1i': './c1.1i',
+            'c2.2i': './c2.2i',
+            'c3.3i': './c3.3i',
+            'c4.4i': './c4.4i',
+            'c5.5i': './c5.5i',
+            'c6.6i': './c6.6i',
+            'c7.7i': './c7.7i',
+            'c8.8i': './c8.8i',
+            'c9.9i': './c9.9i',
+            'm1.1h': './m1.1h',
+            'm2.2h': './m2.2h',
+            'm4.4h': './m4.4h',
+            'm5.5h': './m5.5h',
+            '3j.3h': './3a.3h',
+            'j6.6h': './a6.6h',
+        }
+    },
+    'Bootleg': {
+        'name': 'Bootleg (Unofficial)',
+        'notes': [
+            'Copyright changed from "© 1982 KONAMI" to "1982"',
+            'Title graphic zeroed out (no "TUTANKHAM" logo)',
+            'Copy protection bypassed (checksum branch NOPed at 0xCE27)',
+            'High score name changed from HTA to SYY',
+            'Otherwise identical to Konami version, including the ignored checksum'
+        ],        
+        'files': {
+            'c1.1i': './t7.1i',
+            'c2.2i': './t8.2i',
+            'c3.3i': './t9.3i',
+            'c4.4i': './t10.4i',
+            'c5.5i': './t11.5i',
+            'c6.6i': './t12.6i',
+            'c7.7i': './t13.7i',
+            'c8.8i': './t14.8i',
+            'c9.9i': './t15.9i',
+            'm1.1h': './t1.1h',
+            'm2.2h': './t2.2h',
+            'm4.4h': './t4.4h',
+            'm5.5h': './t5.5h',
+            '3j.3h': './t3.3h',
+            'j6.6h': './t6.6h',
+        }
+    }
+}
+
 # Global ROM cache - loaded once at startup
 rom_cache          = {}
 # Constants
@@ -961,31 +1026,59 @@ def load_all(location=None):
 def load_all_roms():
     """Load all ROM files into memory at startup"""
     global rom_cache
-    for rom_name, rom_path in ROM_FILES.items():
+    rom_files = ROM_SETS[CURRENT_ROM_SET]['files']
+    
+    # Clear cache first
+    rom_cache.clear()
+    logging.info(f"Loading ROM set: {ROM_SETS[CURRENT_ROM_SET]['name']}")
+    
+    for rom_name, rom_path in rom_files.items():
         try:
             with open(rom_path, 'rb') as f:
                 rom_cache[rom_name] = bytearray(f.read())
-            logging.info("Loaded %s: %d bytes", rom_name, len(rom_cache[rom_name]))
+            # Log both logical name and physical filename
+            physical_filename = os.path.basename(rom_path)
+            logging.info("Loaded %s from %s: %d bytes", rom_name, physical_filename, len(rom_cache[rom_name]))
         except Exception as e:
-            logging.critical("Error loading %s", rom_name)
+            physical_filename = os.path.basename(rom_path)
+            logging.critical("Error loading %s from %s: %s", rom_name, physical_filename, e)
+    
+    logging.info(f"ROM cache now contains {len(rom_cache)} files")
 
 def load_roms_from_folder(folder_path: str):
-    """Temporarily repoint ROM_FILES and call load_all_roms()."""
-    original = ROM_FILES.copy()
+    """Temporarily repoint ROM files and call load_all_roms()."""
+    global ROM_SETS, CURRENT_ROM_SET
+    
+    original = ROM_SETS[CURRENT_ROM_SET]['files'].copy()
     try:
-        for name in ROM_FILES:
-            p = os.path.join(folder_path, name)
-            if not os.path.isfile(p):
-                raise FileNotFoundError(f"Missing {name} in {folder_path}")
-            ROM_FILES[name] = p
+        # Look for files by their PHYSICAL names in the folder
+        updated_paths = {}
+        rom_files = ROM_SETS[CURRENT_ROM_SET]['files']
+        
+        for logical_name, physical_path in rom_files.items():
+            # Extract just the filename
+            physical_filename = os.path.basename(physical_path)
+            full_path = os.path.join(folder_path, physical_filename)
+            
+            if not os.path.isfile(full_path):
+                raise FileNotFoundError(f"Missing {physical_filename} (needed for {logical_name}) in {folder_path}")
+            
+            updated_paths[logical_name] = full_path
+            logging.info(f"Found {logical_name} -> {physical_filename}")
+        
+        # Update paths temporarily
+        ROM_SETS[CURRENT_ROM_SET]['files'].update(updated_paths)
+        
         load_all_roms()
         logging.info("ROMs loaded from folder: %s", folder_path)
     finally:
-        ROM_FILES.clear()
-        ROM_FILES.update(original)
+        ROM_SETS[CURRENT_ROM_SET]['files'].clear()
+        ROM_SETS[CURRENT_ROM_SET]['files'].update(original)
 
 def load_roms_from_zip():
     """Load ROMs from a known zip file in the application directory."""
+    global ROM_SETS, CURRENT_ROM_SET
+    
     try:
         app_dir = os.path.dirname(os.path.abspath(__file__))
         zip_path = os.path.join(app_dir, "tutankhm.zip")
@@ -998,30 +1091,84 @@ def load_roms_from_zip():
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(extract_dir)
             logging.info(f"Extracted ROMs from: {zip_path}")
+            
+            # Log what files were extracted
+            extracted_files = os.listdir(extract_dir)
+            logging.info(f"Extracted files: {', '.join(extracted_files)}")
 
-            # Point ROM_FILES to extracted versions
+            # Point ROM_SETS to extracted versions
+            # Look for files by their PHYSICAL names (not logical names)
             updated_paths = {}
-            for name in ROM_FILES:
-                extracted_path = os.path.join(extract_dir, name)
+            rom_files = ROM_SETS[CURRENT_ROM_SET]['files']
+            
+            for logical_name, physical_path in rom_files.items():
+                # Extract just the filename from the path (e.g., './a6.6h' -> 'a6.6h')
+                physical_filename = os.path.basename(physical_path)
+                extracted_path = os.path.join(extract_dir, physical_filename)
+                
                 if os.path.exists(extracted_path):
-                    updated_paths[name] = extracted_path
+                    updated_paths[logical_name] = extracted_path
+                    logging.info(f"Mapped {logical_name} -> {physical_filename}")
+                else:
+                    logging.error(f"MISSING: {logical_name} needs physical file '{physical_filename}' but not found in zip!")
+                    messagebox.showerror(
+                        "Missing ROM File",
+                        f"ROM set '{ROM_SETS[CURRENT_ROM_SET]['name']}' requires file:\n"
+                        f"  {physical_filename}\n\n"
+                        f"But it was not found in {zip_path}\n\n"
+                        f"Available files: {', '.join(extracted_files)}"
+                    )
+                    return
 
-            # Only temporarily override ROM_FILES
-            original_paths = ROM_FILES.copy()
-            ROM_FILES.update(updated_paths)
+            # Only temporarily override ROM_SETS
+            original_paths = rom_files.copy()
+            ROM_SETS[CURRENT_ROM_SET]['files'].update(updated_paths)
 
             # Load the ROMs
             load_all_roms()
             logging.info("ROMs loaded successfully from zip file.")
 
-            # Restore ROM_FILES to original paths
-            ROM_FILES.clear()
-            ROM_FILES.update(original_paths)
+            # Restore ROM_SETS to original paths
+            ROM_SETS[CURRENT_ROM_SET]['files'].clear()
+            ROM_SETS[CURRENT_ROM_SET]['files'].update(original_paths)
 
             # Temporary directory auto-deletes here
     except Exception as e:
         logging.error(f"Error loading from zip: {e}")
         messagebox.showerror("Error", f"Failed to load ROMs from zip:\n{e}")
+
+def switch_rom_set(new_set):
+    """Switch to a different ROM set and reload cache"""
+    global CURRENT_ROM_SET
+    
+    if new_set not in ROM_SETS:
+        messagebox.showerror("Error", f"Unknown ROM set: {new_set}")
+        return
+    
+    # Check if there are unsaved changes
+    # (We could add a global flag to track this in the future)
+    
+    CURRENT_ROM_SET = new_set
+    logging.info(f"Switched to ROM set: {ROM_SETS[new_set]['name']}")
+    
+    # Reload ROMs
+    try:
+        load_all("Zip")
+        status_label.config(text=f"Loaded ROM set: {ROM_SETS[new_set]['name']}")
+
+        # Build message with notes if available
+        message = f"Switched to {ROM_SETS[new_set]['name']}\n\nROMs reloaded successfully."
+        
+        if 'notes' in ROM_SETS[new_set]:
+            notes = ROM_SETS[new_set]['notes']
+            message += "\n\nNotes:\n" + "\n".join(f"• {note}" for note in notes)
+        
+        messagebox.showinfo("ROM Set Changed", message)
+        logging.info("ROM set switch complete")
+
+    except Exception as e:
+        logging.error(f"Error switching ROM set: {e}")
+        messagebox.showerror("Error", f"Failed to switch ROM set:\n{e}")
 
 def save_all_roms(target_directory=None):
     """Write all modified ROMs back to disk
@@ -1030,12 +1177,14 @@ def save_all_roms(target_directory=None):
         target_directory: Optional directory path. If None, saves to original ROM_FILES paths.
                          If specified, saves all ROMs to that directory with original names.
     """
+    rom_files = ROM_SETS[CURRENT_ROM_SET]['files']
+    
     for rom_name, rom_data in rom_cache.items():
         try:
             if target_directory:
                 rom_path = os.path.join(target_directory, rom_name)
             else:
-                rom_path = ROM_FILES[rom_name]
+                rom_path = rom_files[rom_name]
             
             with open(rom_path, 'wb') as f:
                 f.write(rom_data)
@@ -4944,8 +5093,29 @@ status_label.pack(fill=tk.X, padx=5, pady=2)
 # Add a welcome message to main window
 welcome_frame = ttk.Frame(root, padding=20)
 welcome_frame.pack(expand=True)
+
 ttk.Label(welcome_frame, text=f"Tutankham ROM Editor {EDITOR_VERSION}", 
          font=('Arial', 18, 'bold')).pack(pady=10)
+
+# ROM set selector
+romset_frame = ttk.Frame(welcome_frame)
+romset_frame.pack(pady=10)
+
+ttk.Label(romset_frame, text="ROM Set:", font=('Arial', 11)).pack(side=tk.LEFT, padx=5)
+
+rom_set_var = tk.StringVar(value=CURRENT_ROM_SET)
+rom_set_dropdown = ttk.Combobox(romset_frame,
+                                textvariable=rom_set_var,
+                                values=list(ROM_SETS.keys()),
+                                state="readonly",
+                                width=20)
+rom_set_dropdown.pack(side=tk.LEFT, padx=5)
+rom_set_dropdown.bind("<<ComboboxSelected>>", 
+                     lambda e: switch_rom_set(rom_set_var.get()))
+
+# Store reference
+root._rom_set_var = rom_set_var
+
 ttk.Label(welcome_frame, text="Select a function from the menu to begin", 
          font=('Arial', 12)).pack(pady=5)
 ttk.Label(welcome_frame, text="Always remember to SAVE your work after editing", 
