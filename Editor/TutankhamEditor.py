@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v1.00-RC5"    # Editor Version Number
+EDITOR_VERSION = "v1.00-RC6"    # Editor Version Number
 open_windows = {			    # Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -3050,15 +3050,20 @@ def on_map_click(event, window):
             return
         
         # Check if clicking on player start marker
-        if visual_map[row, col] == 0x29:
-            if window.difficulty > 0:
-                messagebox.showwarning("Edit Locked", 
-                    "Map Structure editing is only allowed in Difficulty 1.")
+        objects = window.object_data[window.difficulty][window.selected_map]
+        ps = objects['player_start']
+        if ps['y'] != 0:
+            ps_col = ps['y'] // 0x08
+            ps_row_from_bottom = ps['x'] // 0x08
+            ps_row = (map_height - 1) - ps_row_from_bottom
+            
+            # Check if click is on player start position
+            if row == ps_row and col == ps_col:
+                window.selected_player_start = (row, col)
+                window.status_var.set("Player start selected - drag to move")
+                logging.info(f"Player start selected at ({row}, {col})")
+                render_map_view(window)
                 return
-            window.selected_player_start = (row, col)
-            window.status_var.set("Player start selected - drag to move")
-            render_map_view(window)
-            return
         
         # Handle teleporter placement specially (two-phase)
         if window.selected_object_type == 'teleporter':
@@ -3179,9 +3184,14 @@ def place_object_marker(row, col, window):
 def place_tile(row, col, window):
     """Place a tile on the map - writes directly to ROM cache"""
     try:
-        if window.difficulty > 0:
+        # Check if this is an item tile that can be placed on any difficulty
+        is_item_tile = window.selected_tile in ITEM_TILES
+        
+        # Only block structural changes on difficulty > 0
+        if window.difficulty > 0 and not is_item_tile:
             messagebox.showwarning("Edit Locked", 
-                "Map Structure editing is only allowed in Difficulty 1.")
+                "Map object editing is only allowed in Difficulty 1.\n\n"
+                "Items (rings, keys, crowns, keyholes) can be placed on any difficulty.")
             return
         
         # Get actual width first
@@ -3358,6 +3368,20 @@ def on_map_hover(event, window):
 def on_map_drag(event, window):
     """Handle map canvas drag"""
     try:
+        # Handle player start drag
+        if window.selected_player_start is not None:
+            canvas_x = window.map_canvas.canvasx(event.x)
+            canvas_y = window.map_canvas.canvasy(event.y)
+            
+            col = int(canvas_x // (16 * window.zoom_level))
+            row = int(canvas_y // (16 * window.zoom_level))
+            
+            if 0 <= row < map_height and 0 <= col < map_width:
+                window.player_start_ghost_pos = (row, col)
+                render_map_view(window)
+            return
+        
+        # Handle door drag (existing code)
         if window.selected_door is None:
             return
         
@@ -3381,6 +3405,34 @@ def on_map_release(event, window):
         
         col = int(canvas_x // (16 * window.zoom_level))
         row = int(canvas_y // (16 * window.zoom_level))
+        
+        # Handle player start release
+        if window.selected_player_start is not None:
+            if 0 <= row < map_height and 0 <= col < map_width:
+                objects = window.object_data[window.difficulty][window.selected_map]
+                
+                # Convert to game coordinates
+                row_from_bottom = (map_height - 1) - row
+                x = row_from_bottom * 0x08
+                y = col * 0x08
+                
+                # DON'T touch the visual map - just update object data
+                objects['player_start']['x'] = x
+                objects['player_start']['y'] = y
+                
+                # Save to ROM
+                save_object_data(objects, window.selected_map, window.difficulty)
+                
+                mark_modified(window)
+                window.status_var.set(f"Player start moved to ({col}, {row})")
+                logging.info(f"Player start moved to ({col}, {row})")
+            else:
+                window.status_var.set("Invalid player start position")
+            
+            window.selected_player_start = None
+            window.player_start_ghost_pos = None
+            render_map_view(window)
+            return
         
         # Handle door release
         if window.selected_door is not None:
@@ -3610,7 +3662,18 @@ def render_map_view(window):
                 window.map_canvas.create_rectangle(x, y, x+size, y+size,
                                                  outline='yellow', width=2, dash=(4, 4),
                                                  tags='door_ghost')
-        
+
+        # Draw player start ghost if dragging
+        if window.player_start_ghost_pos is not None:
+            row, col = window.player_start_ghost_pos
+            if 0 <= row < map_height and 0 <= col < actual_width:
+                x = col * 16 * window.zoom_level
+                y = row * 16 * window.zoom_level
+                size = 16 * window.zoom_level
+                window.map_canvas.create_rectangle(x, y, x+size, y+size,
+                                                outline='lime', width=2, dash=(4, 4),
+                                                tags='player_start_ghost')
+
         # Update scroll region to match actual width
         window.map_canvas.configure(scrollregion=(0, 0, 
                                                  int(actual_width * 16 * window.zoom_level), 
