@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v1.00-RC2"    # Editor Version Number
+EDITOR_VERSION = "v1.00-RC3"    # Editor Version Number
 open_windows = {			    # Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -2936,7 +2936,7 @@ def on_map_click(event, window):
         if is_door_tile(row, col, window):
             if window.difficulty > 0:
                 messagebox.showwarning("Edit Locked", 
-                    "Visual/logical map editing is only allowed in Difficulty 1.")
+                    "Map Structure editing is only allowed in Difficulty 1.")
                 return
             door_pos = window.door_positions[window.selected_map]
             window.selected_door = door_pos
@@ -2949,7 +2949,7 @@ def on_map_click(event, window):
         if visual_map[row, col] == 0x29:
             if window.difficulty > 0:
                 messagebox.showwarning("Edit Locked", 
-                    "Visual/logical map editing is only allowed in Difficulty 1.")
+                    "Map Structure editing is only allowed in Difficulty 1.")
                 return
             window.selected_player_start = (row, col)
             window.status_var.set("Player start selected - drag to move")
@@ -3075,6 +3075,11 @@ def place_object_marker(row, col, window):
 def place_tile(row, col, window):
     """Place a tile on the map - writes directly to ROM cache"""
     try:
+        if window.difficulty > 0:
+            messagebox.showwarning("Edit Locked", 
+                "Map Structure editing is only allowed in Difficulty 1.")
+            return
+        
         # Get actual width first
         config = window.object_data[window.difficulty][window.selected_map]
         map_width_value = config.get('map_width', 1)
@@ -3140,10 +3145,6 @@ def place_tile(row, col, window):
 
 def place_teleporter_step(row, col, window):
     """Two-phase teleporter placement - stores endpoints as objects only"""
-    if window.difficulty > 0:
-        messagebox.showwarning("Edit Locked", 
-            "Object placement is only allowed in Difficulty 1.")
-        return
     
     # Convert to game coordinates
     row_from_bottom = (map_height - 1) - row
@@ -3211,10 +3212,6 @@ def place_teleporter_step(row, col, window):
 
 def delete_teleporter(col, window):
     """Delete a teleporter pair in the given column"""
-    if window.difficulty > 0:
-        messagebox.showwarning("Edit Locked", 
-            "Object deletion is only allowed in Difficulty 1.")
-        return
     
     # Convert column to game coordinate
     y_coord = col * 0x08
