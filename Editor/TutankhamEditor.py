@@ -1074,9 +1074,19 @@ def register_callback(event_type, callback):
 def trigger_callback(event_type, *args, **kwargs):
     """Trigger all callbacks for an event type"""
     if event_type in state_callbacks:
-        for callback in state_callbacks[event_type]:
+        # Make a copy to avoid modification during iteration
+        callbacks = state_callbacks[event_type].copy()
+        
+        for callback in callbacks:
             try:
                 callback(*args, **kwargs)
+            except tk.TclError as e:
+                # Window was destroyed, remove this callback
+                if "bad window path name" in str(e):
+                    logging.debug(f"Removing stale callback for {event_type}")
+                    state_callbacks[event_type].remove(callback)
+                else:
+                    logging.error(f"Callback error for {event_type}: {e}")
             except Exception as e:
                 logging.error(f"Callback error for {event_type}: {e}")
 
