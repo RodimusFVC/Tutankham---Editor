@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v1.00-RC3"    # Editor Version Number
+EDITOR_VERSION = "v1.00-RC4"    # Editor Version Number
 open_windows = {			    # Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -1624,6 +1624,8 @@ def save_map_config(map_index, difficulty, config):
     block_number = (difficulty * 4) + map_index
     offset = CONFIG_BASE_OFFSET + (block_number * OBJECT_BLOCK_SIZE)
     
+    logging.info(f"Saving config for Map {map_index+1}/D{difficulty+1} at offset 0x{offset:04X}")
+    
     # Write map pointers
     write_byte_to_roms(offset, (config['logical_map_ptr'] >> 8) & 0xFF)
     write_byte_to_roms(offset + 1, config['logical_map_ptr'] & 0xFF)
@@ -1634,9 +1636,13 @@ def save_map_config(map_index, difficulty, config):
     write_byte_to_roms(offset + 4, config['spawn_rate'])
     write_byte_to_roms(offset + 5, config['time_limit'])
     
+    logging.info(f"  Spawn rate: {config['spawn_rate']}, Time limit: {config['time_limit']}s")
+    
     # Write unknown bytes
     for i, byte_val in enumerate(config['unknown_bytes']):
         write_byte_to_roms(offset + 6 + i, byte_val)
+    
+    logging.info(f"  Config saved successfully")
 
 #########################################
 # Map Object Handling Functions
@@ -2868,10 +2874,14 @@ def set_time_limit(window):
             return
         
         window.map_config[window.difficulty][window.selected_map]['time_limit'] = new_limit
-        save_object_data(window.object_data[window.difficulty][window.selected_map], 
-                     window.selected_map, window.difficulty)
+        
+        # SAVE TO ROM IMMEDIATELY
+        save_map_config(window.selected_map, window.difficulty, 
+                       window.map_config[window.difficulty][window.selected_map])
+        
         mark_modified(window)
         window.status_var.set(f"Time limit set to {new_limit} seconds")
+        logging.info(f"Map {window.selected_map+1}/D{window.difficulty+1}: Time limit set to {new_limit}s")
     except ValueError:
         messagebox.showwarning("Invalid Value", "Please enter a valid number")
 
@@ -2885,10 +2895,14 @@ def set_spawn_rate(window):
             return
         
         window.map_config[window.difficulty][window.selected_map]['spawn_rate'] = new_rate
-        save_object_data(window.object_data[window.difficulty][window.selected_map], 
-                     window.selected_map, window.difficulty)        
+        
+        # SAVE TO ROM IMMEDIATELY
+        save_map_config(window.selected_map, window.difficulty, 
+                       window.map_config[window.difficulty][window.selected_map])
+        
         mark_modified(window)
         window.status_var.set(f"Spawn rate set to {new_rate}")
+        logging.info(f"Map {window.selected_map+1}/D{window.difficulty+1}: Spawn rate set to {new_rate}")
     except ValueError:
         messagebox.showwarning("Invalid Value", "Please enter a valid number")
 
@@ -3798,10 +3812,14 @@ def set_map_width(window):
         window.map_width_label.config(text=f"{tile_count} tiles")
         
         window.object_data[window.difficulty][window.selected_map]['map_width'] = new_width
+        
+        # SAVE TO ROM IMMEDIATELY
         save_object_data(window.object_data[window.difficulty][window.selected_map], 
-                     window.selected_map, window.difficulty)
+                        window.selected_map, window.difficulty)
+        
         mark_modified(window)
         window.status_var.set(f"Map width set to {new_width} ({tile_count} tiles)")
+        logging.info(f"Map {window.selected_map+1}/D{window.difficulty+1}: Width set to {new_width} ({tile_count} tiles)")
         render_map_view(window)        
     except ValueError:
         messagebox.showwarning("Invalid Value", "Please enter a valid number (0-3)")
