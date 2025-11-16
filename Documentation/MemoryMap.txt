@@ -518,7 +518,7 @@
 | j6.6h  | 0x0520-0x053F   | 32B   | Font Graphic : Y                | 8×8px, 4bpp                |
 | j6.6h  | 0x0540-0x055F   | 32B   | Font Graphic : Z                | 8×8px, 4bpp                |
 | j6.6h  | 0xF560-0xF59F   | 64B   | Player Weapon/Bullet Sprite     | Needs Decode               |
-| j6.6h  | 0xF5A0-0xF5BF   | 32B   | Player Count Sprite             | 8x8px, 4bpp, interleaved   |
+| j6.6h  | 0xF5A0-0xF5BF   | 32B   | Player Count Sprite             | 8x8px,   4bpp, interleaved |
 | j6.6h  | 0xF5C0-0xF8EF   | 815B  | Copyright Graphic               | 102x16px,4bpp, interleaved |
 | j6.6h  | 0xF8F0-0xFB5F   | 624B  | Timer Banner Graphic            | 32x39px, 4bpp, interleaved |
 | j6.6h  | 0xFB60-0xFBDF   | 128B  | Smart Bomb/Genie Lamp Sprite    | 16x14px, 4bpp, interleaved |
@@ -690,17 +690,22 @@
 | c5.5i  | 0x143E0-0x143FF | 32B   | Tile 0x9F - Glaive Sprite       | 16×16px, 4bpp, interleaved |
 | c6.6i  | 0x15000-0x156FF | 1792B | Logical Map 1 (Collisions)      | Bank 0x05, mapped to 0x9000|
 | c6.6i  | 0x15700-0x15DFF | 1792B | Logical Map 2 (Collisions)      | Bank 0x05, mapped to 0x9700|
-| c6.6i  | 0x15E00-0x15FF3 | 500B  | Unknown Graphic(s)              | Likely Tutankham Logo GFX  |
+| c6.6i  | 0x15E00-0x15EC7 | 200B  | Game Title - Lowercase a        | 20x20px, 4bpp, interleaved |
+| c6.6i  | 0x15EC8-0x15FF3 | 300B  | Game Title - Lowercase k        | 30x20px, 4bpp, interleaved |
 | c6.6i  | 0x15FF4-0x15FFF | 12B   | Padding / Unused Bytes (0xFF)   | Unprogrammed Bytes         |
 | c7.7i  | 0x16000-0x166FF | 1792B | Logical Map 3 (Collisions)      | Bank 0x06, mapped to 0x9000|
 | c7.7i  | 0x16700-0x16DFF | 1792B | Logical Map 4 (Collisions)      | Bank 0x06, mapped to 0x9700|
-| c7.7i  | 0x16E00-0x16FF3 | 500B  | Unknown Graphic(s)              | Likely Tutankham Logo GFX  |
+| c7.7i  | 0x16E00-0x16EC7 | 200B  | Game Title - Lowercase n        | 20x20px, 4bpp, interleaved |
+| c7.7i  | 0x16EC8-0x16FF3 | 300B  | Game Title - Lowercase h        | 30x20px, 4bpp, interleaved |
 | c7.7i  | 0x16FF4-0x16FFF | 12B   | Padding / Unused Bytes (0xFF)   | Unprogrammed Bytes         |
 | c8.8i  | 0x17000-0x172FF | 768B  | Visual Map 1 (Tile Mapping)     | Bank 0x07, mapped to 0x9000|
 | c8.8i  | 0x17300-0x175FF | 768B  | Visual Map 2 (Tile Mapping)     | Bank 0x07, mapped to 0x9300|
 | c8.8i  | 0x17600-0x178FF | 768B  | Visual Map 3 (Tile Mapping)     | Bank 0x07, mapped to 0x9600|
 | c8.8i  | 0x17900-0x17BFF | 768B  | Visual Map 4 (Tile Mapping)     | Bank 0x07, mapped to 0x9900|
-| c8.8i  | 0x17C00-0x17FF8 | 1017B | Unknown Graphic(s)              | Likely Tutankham Logo GFX  |
+| c8.8i  | 0x17C00-0x17D76 | 375B  | Game Title - Uppercase T        | 30x25px, 4bpp, interleaved |
+| c8.8i  | 0x17D77-0x17E3E | 200B  | Game Title - Lowercase u        | 20x20px, 4bpp, interleaved |
+| c8.8i  | 0x17E3F-0x17EF4 | 182B  | Game Title - Lowercase t        | 26x14px, 4bpp, interleaved |
+| c8.8i  | 0x17EF5-0x17FF8 | 260B  | Game Title - Lowercase m        | 20x26px, 4bpp, interleaved |
 | c8.8i  | 0x17FF9-0x17FFF | 7B    | Padding / Unused Bytes (0xFF)   | Unprogrammed Bytes         |
 | c9.9i  | 0x18000-0x183DD | 990B  | Treasure 1 (Map)                | 44x44px, 4bpp, interleaved |
 | c9.9i  | 0x183DE-0x187BB | 990B  | Treasure 2 (Genie Lamp)         | 44x44px, 4bpp, interleaved |
