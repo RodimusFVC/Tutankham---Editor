@@ -8,6 +8,7 @@ INSTRUCTIONS
 Python should be installed/working
   - This project was developed with Python 3.13.7
   - Install additional required packages via 'pip install -r requirements.txt'
+  - To use/run : python TutankhamEditor.py
 
 Must have your own copy of Tutankham game roms (Mame zipped version)
   - The current MAME zipped version should be placed in the folder with the editor
@@ -32,7 +33,7 @@ REMAINING TASKS
   - Enforce one Respawn per 'Screen' to avoid weird scrolling issues on death
   - Finish Decoding Stage Reference Data to allow changing of Stage/Difficulty Order
   - Add Editor for Animation / Display Animation Frames (Found, Not Added)
-  - Update MemoryMap.txt with new findings
+  - Ongoing updates to MemoryMap.txt with new findings
   - Fix Bugs
 
 --------------------------------------------------------------------------------
