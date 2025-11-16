@@ -15,6 +15,7 @@ def read_rom(filename):
     with open(filename, "rb") as f:
         return bytearray(f.read())
 
+# Extract 4bpp sprite from full range (560 bytes)
 def extract_pixels(rom, offset, height, width, mode='tile', bytes_per_row=None):
     """
     Generic 4bpp pixel extractor for ROM sprites/tiles.
@@ -89,45 +90,67 @@ def apply_palette_to_sprite(sprite, palette):
     return color_sprite
 
 # Main display function
-def display_geniecounter():
+def display_GameTitle():
 
-    rom_path = "../c7.7i"
     zoom_factor=30 
 
-#    rom_path = "../c6.6i"
-#    offset = 0x0E00  # Relative file offset for Lower Case *a* in Game Title
-#    sprite_width=20    # Genie Lamp Width
-#    sprite_height=20   # Genie Lamp Height
+# WORKING
+#    rom_path = "../MameTest/untouched/c8.8i"
+#    offset = 0x0C00  # Relative file offset for Upper Case *T* in Game Title - PERFECT
+#    sprite_width=30    
+#    sprite_height=25   
 
-    rom_path = "../c6.6i"
-    offset = 0x0EC0  # Relative file offset for Lower Case *k* in Game Title
-    sprite_width=30    # Genie Lamp Width
-    sprite_height=20   # Genie Lamp Height
+#    rom_path = "../MameTest/untouched/c8.8i"
+#    offset = 0x0D77  # Relative file offset for Lower Case *u* in Game Title - PERFECT
+#    sprite_width=20
+#    sprite_height=20 
 
-#    rom_path = "../c7.7i"
-#    offset = 0x0E00  # Relative file offset for Lower Case *n* in Game Title
-#    sprite_width=20    # Genie Lamp Width
-#    sprite_height=20   # Genie Lamp Height
+#    rom_path = "../MameTest/untouched/c6.6i"
+#    offset = 0x0E00  # Relative file offset for Lower Case *a* in Game Title - PERFECT
+#    sprite_width=20   
+#    sprite_height=20  
 
-#    rom_path = "../c8.8i"
-#    offset = 0x0C00  # Relative file offset for Upper Case *T* in Game Title
-#    sprite_width=30    # Genie Lamp Width
-#    sprite_height=25   # Genie Lamp Height
+#    rom_path = "../MameTest/untouched/c7.7i"
+#    offset = 0x0E00  # Relative file offset for Lower Case *n* in Game Title - PERFECT
+#    sprite_width=20    
+#    sprite_height=20 
 
+#    rom_path = "../MameTest/untouched/c6.6i"
+#    offset = 0x0EC8  # Relative file offset for Lower Case *k* in Game Title - PERFECT
+#    sprite_width=30
+#    sprite_height=20
+
+#    rom_path = "../MameTest/untouched/c7.7i"
+#    offset = 0x0EC8  # Relative file offset for Lower Case *h* in Game Title - PERFECT
+#   sprite_width=30    
+#   sprite_height=20 
+
+#    rom_path = "../MameTest/untouched/c8.8i"
+#    offset = 0x0EF5  # Relative file offset for Lower Case *m* in Game Title - PERFECT
+#    sprite_width=20
+#    sprite_height=26 
+
+# NOT WORKING / MISSING = t
+
+    rom_path = "../MameTest/untouched/c8.8i"
+#    offset = 0x0E40  # Relative file offset for Lower Case *t* in Game Title - Not quite right...
+    offset = 0xE3F
+    sprite_width=26
+    sprite_height=14
 
     rom_data = read_rom(rom_path)
     if len(rom_data) != 4096:
         raise ValueError(f"Expected 4096 bytes in {rom_path}, got {len(rom_data)}")
     root = tk.Tk()
-    root.title("Tutankham j6.6h Genie Lamp Counter Graphic")
+    root.title("Tutankham Game Title Graphics")
 
-    sprite = extract_pixels(rom_data, offset, height=sprite_height, width=sprite_width)  # 16px = 16 bytes per row (even/odd interleaved)
+    sprite = extract_pixels(rom_data, offset, height=sprite_height, width=sprite_width)
 
     sprite = np.rot90(sprite, k=1)  # Rotate 90° clockwise based on your note
     color_sprite = apply_palette_to_sprite(sprite, palette)
-    img = Image.fromarray(color_sprite[:, :, :3], "RGB").resize((sprite_width*zoom_factor, sprite_height*zoom_factor), Image.NEAREST)
+    img = Image.fromarray(color_sprite[:, :, :3], "RGB").resize((sprite_height*zoom_factor, sprite_width*zoom_factor), Image.NEAREST)
     photo = ImageTk.PhotoImage(img)
-    canvas = tk.Canvas(root, width=sprite_width*zoom_factor, height=sprite_height*zoom_factor, bg="#2b2b2b")  # 32×4, 35×4
+    canvas = tk.Canvas(root, width=sprite_height*zoom_factor, height=sprite_width*zoom_factor, bg="#2b2b2b")  # 32×4, 35×4
     canvas.pack(pady=10)
     canvas.create_image(0, 0, image=photo, anchor="nw")
     canvas.image_refs = [photo]  # Keep reference to avoid garbage collection
@@ -136,4 +159,4 @@ def display_geniecounter():
 
 # Run
 if __name__ == "__main__":
-    display_geniecounter()
+    display_GameTitle()

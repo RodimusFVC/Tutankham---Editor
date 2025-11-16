@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v1.00-RC4"    # Editor Version Number
+EDITOR_VERSION = "v1.00-RC5"    # Editor Version Number
 open_windows = {			    # Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -385,6 +385,86 @@ UI_GRAPHICS_CONFIG = {
         'rotate': True,
         'zoom': 10,
         'description': 'Stage number banner display'
+    },
+    "Title Letter - T": {
+        'rom': 'c8.8i',
+        'offset': 0x0C00,
+        'width': 30,
+        'height': 25,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'Game Title - Upper Case T'
+    },
+    "Title Letter - u": {
+        'rom': 'c8.8i',
+        'offset': 0x0D77,
+        'width': 20,
+        'height': 20,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'Game Title - Lower Case u'
+    },
+    "Title Letter - t": {
+        'rom': 'c8.8i',
+        'offset': 0x0E3F,
+        'width': 26,
+        'height': 14,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'Game Title - Lower Case t'
+    },
+    "Title Letter - a": {
+        'rom': 'c6.6i',
+        'offset': 0x0E00,
+        'width': 20,
+        'height': 20,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'Game Title - Lower Case a'
+    },
+    "Title Letter - n": {
+        'rom': 'c7.7i',
+        'offset': 0x0E00,
+        'width': 20,
+        'height': 20,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'Game Title - Lower Case n'
+    },
+    "Title Letter - k": {
+        'rom': 'c6.6i',
+        'offset': 0x0EC8,
+        'width': 30,
+        'height': 20,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'Game Title - Lower Case k'
+    },
+    "Title Letter - h": {
+        'rom': 'c7.7i',
+        'offset': 0x0EC8,
+        'width': 30,
+        'height': 20,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'Game Title - Lower Case h'
+    },
+    "Title Letter - m": {
+        'rom': 'c8.8i',
+        'offset': 0x0EF5,
+        'width': 20,
+        'height': 26,
+        'mode': 'tile',
+        'rotate': True,
+        'zoom': 10,
+        'description': 'Game Title - Lower Case m'
     }
 }
 

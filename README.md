@@ -29,7 +29,6 @@ ALWAYS REMEMBER TO SAVE BEFORE EXITING!!!! Editor only writes files when told to
 REMAINING TASKS
 --------------------------------------------------------------------------------
 
-  - Decode Game Title Graphics / Add to UI Graphics Editor
   - Enforce one Respawn per 'Screen' to avoid weird scrolling issues on death
   - Finish Decoding Stage Reference Data to allow changing of Stage/Difficulty Order
   - Add Editor for Animation / Display Animation Frames (Found, Not Added)
