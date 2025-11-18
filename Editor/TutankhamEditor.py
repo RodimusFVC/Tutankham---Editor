@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v1.00-RC6"    # Editor Version Number
+EDITOR_VERSION = "v1.00-RC7"    # Editor Version Number
 open_windows = {			    # Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -69,7 +69,8 @@ ROM_CONFIG = {
     'palette_rom': 'm1.1h',}
 # All ROM files with paths
 
-CURRENT_ROM_SET = 'Konami'
+CURRENT_ROM_SET = 'Konami'      # Default Set (Konami, Stern, Bootleg)
+GLOBAL_MODIFIED = False         # Track if ANY changes have been made
 ROM_SETS = {
     'Konami': {
         'name': 'Konami (Original)',
@@ -1090,6 +1091,44 @@ def trigger_callback(event_type, *args, **kwargs):
             except Exception as e:
                 logging.error(f"Callback error for {event_type}: {e}")
 
+def on_quit():
+    """Handle application quit with unsaved changes check"""
+    global GLOBAL_MODIFIED
+    
+    if GLOBAL_MODIFIED:
+        result = messagebox.askyesnocancel(
+            "Unsaved Changes",
+            "You have unsaved changes!\n\n"
+            "Save before quitting?",
+            icon='warning',
+            default='cancel'
+        )
+        
+        if result is None:  # Cancel
+            return
+        elif result:  # Yes - save first
+            # Try to save
+            try:
+                save_roms(None)
+                # If save succeeded, quit
+                root.destroy()
+            except:
+                # Save failed, don't quit
+                return
+        else:  # No - quit without saving
+            confirm = messagebox.askyesno(
+                "Confirm Quit",
+                "Really quit WITHOUT saving?\n\nAll changes will be lost!",
+                icon='warning',
+                default='no'
+            )
+            if confirm:
+                root.destroy()
+    else:
+        # No changes, safe to quit
+        root.destroy()
+
+
 #########################################
 # Rom Handling Functions
 #########################################
@@ -1284,20 +1323,55 @@ def save_all_roms(target_directory=None):
 
 def save_roms(target_directory):
     """Save all ROMs"""
+    global GLOBAL_MODIFIED
+
     try:
+        # Confirm before overwriting
+        if target_directory:
+            msg = f"Overwrite ROM files in:\n{target_directory}\n\nThis cannot be undone!"
+        else:
+            rom_files = ROM_SETS[CURRENT_ROM_SET]['files']
+            sample_path = list(rom_files.values())[0]
+            directory = os.path.dirname(os.path.abspath(sample_path))
+            msg = f"Overwrite ROM files in:\n{directory}\n\nThis cannot be undone!"
+        
+        result = messagebox.askyesno(
+            "Confirm Overwrite",
+            msg,
+            icon='warning',
+            default='no'
+        )
+        
+        if not result:
+            logging.info("Save cancelled by user")
+            return
+        
         # Update checksums before saving
         update_copyright_checksum()
         
-        # Visual maps  are already in rom_cache from direct writes
         # Generate logical maps from visual maps
         generate_logical_maps_from_visual()
-        # High Scores and Palettes are already written to rom_cache
-        # Object data is already written to rom_cache via write_byte_to_roms()
-
+        
         # Write to disk
         save_all_roms(target_directory)
+
+        # Clear modified flag
+        GLOBAL_MODIFIED = False
         
+        # Clear asterisks from all open editor windows
+        for window in open_windows.values():
+            if window is not None:
+                try:
+                    title = window.winfo_toplevel().title()
+                    if title.endswith(" *"):
+                        window.winfo_toplevel().title(title[:-2])
+                    if hasattr(window, 'modified'):
+                        window.modified = False
+                except:
+                    pass
+
         messagebox.showinfo("Success", "ROMs saved successfully")
+        logging.info("ROMs saved successfully")
     except Exception as e:
         logging.error(f"Error saving ROMs: {e}")
         messagebox.showerror("Error", f"Failed to save ROMs:\n{e}")
@@ -2998,11 +3072,16 @@ def set_spawn_rate(window):
 
 def mark_modified(window):
     """Mark the editor as having unsaved changes"""
+    global GLOBAL_MODIFIED
+    
     if not window.modified:
         window.modified = True
         current_title = window.winfo_toplevel().title()
         if not current_title.endswith("*"):
             window.winfo_toplevel().title(current_title + " *")
+    
+    # Set global flag
+    GLOBAL_MODIFIED = True
 
 def zoom_in(window):
     """Zoom in on map"""
@@ -5193,6 +5272,7 @@ def show_about():
 root = tk.Tk()
 root.title(f"Tutankham ROM Editor {EDITOR_VERSION}")
 root.geometry("400x300")
+root.protocol("WM_DELETE_WINDOW", on_quit)
 
 #########################################
 # Create Dropdown Menus
@@ -5217,7 +5297,7 @@ filemenu.add_command(label="Save ROMs",
 filemenu.add_command(label="Save ROMs To Folder", 
                     command=lambda: save_roms_to_folder())
 filemenu.add_separator()
-filemenu.add_command(label="Exit", command=root.quit)
+filemenu.add_command(label="Exit", command=on_quit)
 menubar.add_cascade(label="File", menu=filemenu)
 # --- Editor Menu ---
 editormenu = tk.Menu(menubar, tearoff=False)
