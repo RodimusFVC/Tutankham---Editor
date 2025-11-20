@@ -7,6 +7,7 @@ import shutil
 from datetime import datetime
 import logging
 from colorlog import ColoredFormatter
+import webcolors
 import zipfile
 import tempfile
 import sys
@@ -37,7 +38,7 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v1.00-RC7"    # Editor Version Number
+EDITOR_VERSION = "v1.00-RC8"    # Editor Version Number
 open_windows = {			    # Window Tracking - ensure only one instance of each editor
     'map_editor': None,
     'tile_editor': None,
@@ -751,7 +752,7 @@ class PixelEditor:
         
         # Create color swatches (0-14) in 2-column grid, skipping 0 and 15
         # Colors to show: 1-14 (14 colors total = 7 rows × 2 columns)
-        colors_to_show = list(range(0, 15))  # Skip 0 (background) and 15 (always black)
+        colors_to_show = list(range(0, 16))  # Skip 0 (background) and 15 (always black)
         
         for idx, color_idx in enumerate(colors_to_show):
             row = idx // 2
@@ -763,6 +764,8 @@ class PixelEditor:
             
             # Get RGB values
             r, g, b = self.palette[color_idx][1], self.palette[color_idx][2], self.palette[color_idx][3]
+            logging.info(f"Selected color {color_idx} : R {r} G {g} B {b}")
+            color_name = self.closest_color_name((r, g, b))
             hex_color = f'#{r:02x}{g:02x}{b:02x}'
             
             # Color swatch
@@ -773,8 +776,32 @@ class PixelEditor:
             swatch.bind('<Button-1>', lambda e, c=color_idx: self.select_color(c))
             
             # Label
-            ttk.Label(color_frame, text=f"Color {color_idx}", 
+            ttk.Label(color_frame, text=color_name, 
                     font=('Arial', 9)).pack(side=tk.LEFT, padx=5)
+#            ttk.Label(color_frame, text=f"Color {color_idx}", 
+#                    font=('Arial', 9)).pack(side=tk.LEFT, padx=5)
+
+    def closest_color_name(self, rgb):
+        import webcolors
+
+        r, g, b = rgb
+        min_distance = None
+        closest_name = None
+
+        # webcolors supports this in all versions:
+        for name in webcolors.names():
+            try:
+                cr, cg, cb = webcolors.name_to_rgb(name)
+            except ValueError:
+                continue
+
+            dist = (r - cr)**2 + (g - cg)**2 + (b - cb)**2
+
+            if min_distance is None or dist < min_distance:
+                min_distance = dist
+                closest_name = name
+
+        return closest_name
 
     def change_palette(self):
         """Change the palette and re-render"""
@@ -3208,6 +3235,17 @@ def place_object_marker(row, col, window):
         
         objects = window.object_data[window.difficulty][window.selected_map]
         
+        # Check if correct tile exists at this location (check D1 visual map)
+        visual_map_d1 = load_visual_map_from_cache(window.selected_map)
+        
+        # All object markers require empty path (0x26)
+        if visual_map_d1[row, col] != empty_path_tile:
+            messagebox.showwarning("Invalid Placement",
+                f"Cannot place object here.\n"
+                f"An empty path tile (0x{empty_path_tile:02X}) must exist at this location.\n"
+                f"Switch to Difficulty 1 to clear the path first.")
+            return
+        
         if window.selected_object_type == 'respawn':
             # Check if we have room
             active_respawns = sum(1 for respawn in objects['respawns'] if respawn['y'] != 0)
@@ -3236,26 +3274,25 @@ def place_object_marker(row, col, window):
                 "Click on the existing player start marker to drag it to a new location.")
 
         elif window.selected_object_type == 'enemy_spawn':
-                    # Check if we have room
-                    active_spawns = sum(1 for spawn in objects['spawns'] if spawn['y'] != 0)
-                    if active_spawns >= NUM_SPAWNS:
-                        messagebox.showwarning("Limit Reached", 
-                            f"Maximum {NUM_SPAWNS} enemy spawn points allowed")
-                        return
-                    
-                    # Add enemy spawn
-                    for spawn in objects['spawns']:
-                        if spawn['y'] == 0:  # Empty slot
-                            spawn['x'] = x
-                            spawn['y'] = y
-                            # Write to ROM immediately
-                            save_object_data(objects, window.selected_map, window.difficulty)
-                            break
-                    
-                    mark_modified(window)
-                    window.status_var.set(f"Placed enemy spawn at ({col}, {row})")
-                    render_map_view(window)
-                    update_map_counters(window)
+            # Check if we have room
+            active_spawns = sum(1 for spawn in objects['spawns'] if spawn['y'] != 0)
+            if active_spawns >= NUM_SPAWNS:
+                messagebox.showwarning("Limit Reached", 
+                    f"Maximum {NUM_SPAWNS} enemy spawn points allowed")
+                return
+            
+            # Add enemy spawn
+            for spawn in objects['spawns']:
+                if spawn['y'] == 0:  # Empty slot
+                    spawn['x'] = x
+                    spawn['y'] = y
+                    save_object_data(objects, window.selected_map, window.difficulty)
+                    break
+            
+            mark_modified(window)
+            window.status_var.set(f"Placed enemy spawn at ({col}, {row})")
+            render_map_view(window)
+            update_map_counters(window)
 
     except Exception as e:
         logging.error(f"Error placing object marker: {e}")
@@ -3263,16 +3300,6 @@ def place_object_marker(row, col, window):
 def place_tile(row, col, window):
     """Place a tile on the map - writes directly to ROM cache"""
     try:
-        # Check if this is an item tile that can be placed on any difficulty
-        is_item_tile = window.selected_tile in ITEM_TILES
-        
-        # Only block structural changes on difficulty > 0
-        if window.difficulty > 0 and not is_item_tile:
-            messagebox.showwarning("Edit Locked", 
-                "Map object editing is only allowed in Difficulty 1.\n\n"
-                "Items (rings, keys, crowns, keyholes) can be placed on any difficulty.")
-            return
-        
         # Get actual width first
         config = window.object_data[window.difficulty][window.selected_map]
         map_width_value = config.get('map_width', 1)
@@ -3290,7 +3317,7 @@ def place_tile(row, col, window):
                 "This tile is part of the door. Use drag-and-drop to move the door.")
             return
         
-        # Check if this tile requires an item object FIRST
+        # Check if this tile requires an item object (objects can be placed in any difficulty)
         if window.selected_tile in ITEM_TILES:
             # Convert to game coordinates (YY YY XX format)
             row_from_bottom = (map_height - 1) - row
@@ -3315,17 +3342,30 @@ def place_tile(row, col, window):
                     f"Maximum {max_count} {item_type} allowed per map")
                 return
             
-            # Write the EMPTY visual tile (not the filled one)
+            # Check if correct empty box exists at this location (visual map)
+            visual_map = load_visual_map_from_cache(window.selected_map)
             empty_tile = ITEM_TILES[window.selected_tile]
-            write_visual_tile_to_cache(window.selected_map, row, col, empty_tile)
             
-            # Add to appropriate item type list
+            if visual_map[row, col] != empty_tile:
+                messagebox.showwarning("Invalid Placement",
+                    f"Cannot place {item_type[:-1]} here.\n"
+                    f"An empty {item_type[:-1]} box (tile 0x{empty_tile:02X}) must exist at this location.")
+                return
+            
+            # ONLY add to object data - DO NOT modify visual map
+            # (The empty box should already be there from D1 editing)
             item = {'y': y, 'x': x}
             objects['items'][item_type].append(item)
             
             save_object_data(objects, window.selected_map, window.difficulty)
         else:
-            # Regular tile - write as-is
+            # Regular tile placement - ONLY allowed in Difficulty 1
+            if window.difficulty > 0:
+                messagebox.showwarning("Edit Locked", 
+                    "Map Structure editing is only allowed in Difficulty 1.")
+                return
+            
+            # Write to visual map
             write_visual_tile_to_cache(window.selected_map, row, col, window.selected_tile)
         
         mark_modified(window)
@@ -3346,6 +3386,16 @@ def place_teleporter_step(row, col, window):
     
     objects = window.object_data[window.difficulty][window.selected_map]
     
+    # Check if correct tile exists at this location (check D1 visual map)
+    visual_map_d1 = load_visual_map_from_cache(window.selected_map)
+    
+    if visual_map_d1[row, col] != empty_path_tile:
+        messagebox.showwarning("Invalid Placement",
+            f"Cannot place teleporter here.\n"
+            f"An empty path tile (0x{empty_path_tile:02X}) must exist at this location.\n"
+            f"Switch to Difficulty 1 to clear the path first.")
+        return
+    
     if window.teleporter_first_pos is None:
         # First click - store first endpoint
         # Check if this column already has a teleporter
@@ -3355,9 +3405,9 @@ def place_teleporter_step(row, col, window):
                     f"Column {col} already has a teleporter")
                 return
         
-        window.teleporter_first_pos = (row, col, x, y)  # Store row, col, and game coords
+        window.teleporter_first_pos = (row, col, x, y)
         mark_modified(window)
-        render_map_view(window)  # Show first endpoint overlay
+        render_map_view(window)
         window.status_var.set(
             f"First teleporter endpoint at (R{row}, C{col}). "
             f"Place second endpoint in SAME COLUMN (ESC to cancel)")
@@ -3383,11 +3433,10 @@ def place_teleporter_step(row, col, window):
         # Add to object data
         for tp in objects['teleports']:
             if tp['y'] == 0:  # Empty slot
-                tp['y'] = y  # Column coordinate (same for both endpoints)
+                tp['y'] = y
                 tp['bottom_row'] = bottom_x
                 tp['top_row'] = top_x
                 
-                # Write to ROM immediately
                 save_object_data(objects, window.selected_map, window.difficulty)
                 
                 mark_modified(window)
