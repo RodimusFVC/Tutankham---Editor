@@ -38,19 +38,19 @@ logger.setLevel(logging.INFO)
 # Menu Data Setup
 #########################################
 
-EDITOR_VERSION = "v1.00-RC8"    # Editor Version Number
-open_windows = {			    # Window Tracking - ensure only one instance of each editor
-    'map_editor': None,
-    'tile_editor': None,
-    'font_editor': None,
-    'ui_graphics': None,
+EDITOR_VERSION = "v1.00"        # Editor Version Number
+open_windows   = {			    # Window Tracking - ensure only one instance of each editor
+    'map_editor':      None,
+    'tile_editor':     None,
+    'font_editor':     None,
+    'ui_graphics':     None,
     'treasure_editor': None,
-    'high_score': None,
-    'palette': None}
+    'high_score':      None,
+    'palette':         None}
 state_callbacks = {             # Callback registry for cross-window updates
     'palette_changed': [],
-    'tile_changed': [],
-    'font_changed': []
+    'tile_changed':    [],
+    'font_changed':    []
 }
 
 #########################################
@@ -209,6 +209,12 @@ TREASURE_TILES = [
 SPAWN_MARKER_TILES = [0x29, # Player start (drag-only, not in palette)
               0x17]         # Respawn flame
 # Composite block definitions
+DOOR_POSITIONS_BY_WIDTH = {
+    0: (8, 11),            # Width 0: 16 tiles
+    1: (8, 27),            # Width 1: 32 tiles
+    2: (8, 43),            # Width 2: 48 tiles
+    3: (8, 59),            # Width 3: 64 tiles
+}
 DOOR_TILES = np.array([
    [115, 116, 117],          # Door Top Tiles
    [118, 119, 120],          # Door Middle Tiles
@@ -778,12 +784,8 @@ class PixelEditor:
             # Label
             ttk.Label(color_frame, text=color_name, 
                     font=('Arial', 9)).pack(side=tk.LEFT, padx=5)
-#            ttk.Label(color_frame, text=f"Color {color_idx}", 
-#                    font=('Arial', 9)).pack(side=tk.LEFT, padx=5)
 
     def closest_color_name(self, rgb):
-        import webcolors
-
         r, g, b = rgb
         min_distance = None
         closest_name = None
@@ -2277,9 +2279,6 @@ def initialize_map_editor_state(window):
     window.teleporter_first_pos = None
     window.dragging_object = None
     window.drag_ghost_pos = None
-    window.selected_door = None
-    window.door_drag_start = None
-    window.door_ghost_pos = None
     window.selected_player_start = None
     window.player_start_ghost_pos = None
     
@@ -3142,19 +3141,6 @@ def on_map_click(event, window):
         
         visual_map = load_visual_map_from_cache(window.selected_map)
         
-        # Check if clicking on door
-        if is_door_tile(row, col, window):
-            if window.difficulty > 0:
-                messagebox.showwarning("Edit Locked", 
-                    "Map Structure editing is only allowed in Difficulty 1.")
-                return
-            door_pos = window.door_positions[window.selected_map]
-            window.selected_door = door_pos
-            window.door_drag_start = (row, col)
-            window.status_var.set("Door selected - drag to move")
-            render_map_view(window)
-            return
-        
         # Check if clicking on player start marker
         objects = window.object_data[window.difficulty][window.selected_map]
         ps = objects['player_start']
@@ -3216,13 +3202,16 @@ def place_door_at(row, col, window):
     actual_width = (map_width_value + 1) * 16
     
     if row + 3 > map_height or col + 3 > actual_width:
+        logging.error(f"Door placement failed: position ({row}, {col}) doesn't fit")
         return False
     
     for dr in range(3):
         for dc in range(3):
-            # Write visual tile
-            write_visual_tile_to_cache(window.selected_map, row + dr, col + dc, DOOR_TILES[dr, dc])
-            
+            tile_id = DOOR_TILES[dr, dc]
+            write_visual_tile_to_cache(window.selected_map, row + dr, col + dc, tile_id)
+            logging.info(f"Wrote door tile 0x{tile_id:02X} at ({row + dr}, {col + dc})")
+    
+    logging.info(f"Door placed at ({row}, {col})")
     return True
 
 def place_object_marker(row, col, window):
@@ -3314,7 +3303,8 @@ def place_tile(row, col, window):
         # Check if this is a door tile
         if is_door_tile(row, col, window):
             messagebox.showwarning("Protected", 
-                "This tile is part of the door. Use drag-and-drop to move the door.")
+                "This is part of the door. The door position is fixed based on map width.\n"
+                "Use the Width slider to change map width, which will automatically reposition the door.")
             return
         
         # Check if this tile requires an item object (objects can be placed in any difficulty)
@@ -3509,19 +3499,6 @@ def on_map_drag(event, window):
                 render_map_view(window)
             return
         
-        # Handle door drag (existing code)
-        if window.selected_door is None:
-            return
-        
-        canvas_x = window.map_canvas.canvasx(event.x)
-        canvas_y = window.map_canvas.canvasy(event.y)
-        
-        col = int(canvas_x // (16 * window.zoom_level))
-        row = int(canvas_y // (16 * window.zoom_level))
-        
-        if 0 <= row < map_height and 0 <= col < map_width:
-            window.door_ghost_pos = (row, col)
-            render_map_view(window)
     except Exception as e:
         logging.error(f"Error in map drag: {e}")
 
@@ -3562,31 +3539,6 @@ def on_map_release(event, window):
             render_map_view(window)
             return
         
-        # Handle door release
-        if window.selected_door is not None:
-            if 0 <= row < map_height and 0 <= col < map_width:
-                if row + 3 <= map_height and col + 3 <= map_width:
-                    # Clear old door position
-                    clear_door(window.selected_door[0], window.selected_door[1], window)
-                    
-                    # Place at new position
-                    if place_door_at(row, col, window):
-                        window.door_positions[window.selected_map] = (row, col)
-                        mark_modified(window)
-                        window.status_var.set(f"Door moved to ({col}, {row})")
-                    else:
-                        # Failed - restore old position
-                        place_door_at(window.selected_door[0], window.selected_door[1], window)
-                        window.status_var.set("Invalid door placement")
-                else:
-                    window.status_var.set("Door doesn't fit at that location")
-            
-            window.selected_door = None
-            window.door_drag_start = None
-            window.door_ghost_pos = None
-            render_map_view(window)
-            return
-            
     except Exception as e:
         logging.error(f"Error in map release: {e}")
 
@@ -3676,14 +3628,6 @@ def on_escape_key(event, window):
         window.status_var.set("Teleporter placement cancelled")
         update_tile_info(window)
     
-    # Cancel door drag
-    elif window.selected_door is not None:
-        window.selected_door = None
-        window.door_drag_start = None
-        window.door_ghost_pos = None
-        render_map_view(window)
-        window.status_var.set("Door movement cancelled")
-    
     # Cancel player start drag
     elif window.selected_player_start is not None:
         window.selected_player_start = None
@@ -3770,27 +3714,6 @@ def render_map_view(window):
                 window.map_canvas.create_line(0, y, int(actual_width * 16 * window.zoom_level), y, 
                                              fill='#444444')
         
-        # Draw door highlight if selected
-        if window.selected_door is not None:
-            row, col = window.selected_door
-            if col + 3 <= actual_width:  # Only show if door is within valid width
-                x = col * 16 * window.zoom_level
-                y = row * 16 * window.zoom_level
-                size = 3 * 16 * window.zoom_level
-                window.map_canvas.create_rectangle(x-2, y-2, x+size+2, y+size+2,
-                                                 outline='cyan', width=3, tags='door_highlight')
-        
-        # Draw door ghost if dragging
-        if window.door_ghost_pos is not None:
-            row, col = window.door_ghost_pos
-            if row + 3 <= map_height and col + 3 <= actual_width:
-                x = col * 16 * window.zoom_level
-                y = row * 16 * window.zoom_level
-                size = 3 * 16 * window.zoom_level
-                window.map_canvas.create_rectangle(x, y, x+size, y+size,
-                                                 outline='yellow', width=2, dash=(4, 4),
-                                                 tags='door_ghost')
-
         # Draw player start ghost if dragging
         if window.player_start_ghost_pos is not None:
             row, col = window.player_start_ghost_pos
@@ -4081,7 +4004,7 @@ def on_tile_click(tile_id, window):
     window.status_var.set(f"Selected tile 0x{tile_id:02X}")
 
 def set_map_width(window):
-    """Set map width for current map/difficulty"""
+    """Set map width for current map/difficulty and place door at correct position"""
     try:
         new_width = int(window.map_width_var.get())
         if new_width < 0 or new_width > 3:
@@ -4098,10 +4021,27 @@ def set_map_width(window):
         save_object_data(window.object_data[window.difficulty][window.selected_map], 
                         window.selected_map, window.difficulty)
         
+        # Place door at correct position for this width (only in D1)
+        if window.difficulty == 0:
+            door_row, door_col = DOOR_POSITIONS_BY_WIDTH[new_width]
+            
+            # Clear any existing door first (search entire map)
+            visual_map = load_visual_map_from_cache(window.selected_map)
+            for row in range(map_height):
+                for col in range(map_width):
+                    tile = visual_map[row, col]
+                    # Check if this is any door tile (0x73-0x7B)
+                    if 0x73 <= tile <= 0x7B:
+                        write_visual_tile_to_cache(window.selected_map, row, col, empty_path_tile)
+            
+            # Place door at new position
+            place_door_at(door_row, door_col, window)
+            window.door_positions[window.selected_map] = (door_row, door_col)
+        
         mark_modified(window)
         window.status_var.set(f"Map width set to {new_width} ({tile_count} tiles)")
-        logging.info(f"Map {window.selected_map+1}/D{window.difficulty+1}: Width set to {new_width} ({tile_count} tiles)")
-        render_map_view(window)        
+        render_map_view(window)
+   
     except ValueError:
         messagebox.showwarning("Invalid Value", "Please enter a valid number (0-3)")
 
