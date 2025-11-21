@@ -1,161 +1,9 @@
-Physical Maze located in c6.6i and c7.7i (14 bytes width, rotated 90 degrees, CC marks outside borders)
-Logical  Maze located in c8.8i (12 bytes width, rotated 90 degrees)
-
-Maze 1 
-c6 - Physical from 0000 to 06FF
-c8 - Logical  from 0000 to 02FF
-
-Maze 2
-c6 - Physical from 0700 to 0DFF
-c8 - Logical  from 0300 to 05FF
-
-Maze 3
-c7 - Physical from 0000 to 06FF
-c8 - Logical  from 0600 to 08FF
-
-Maze 4
-c7 - Physical from 0700 to 0DFF
-c8 - Logical  from 0900 to 0BFF
-
-# Define the palettes for each map
-palettes = [
-    [  # Palette for map 1
-    (255, 000, 000, 000),  # 00 - A:FF R:00 G:00 B:00 - Black
-    (255, 000, 000, 148),  # 01 - A:FF R:00 G:00 B:94 - Dark Blue
-    (255, 000, 224, 000),  # 02 - A:FF R:00 G:E0 B:00 - Green
-    (255, 133, 133, 148),  # 03 - A:FF R:85 G:85 B:94 - Grey
-    (255, 224, 162, 148),  # 04 - A:FF R:E0 G:A2 B:94 - Flesh
-    (255, 162, 000, 217),  # 05 - A:FF R:A2 G:00 B:D9 - Purple
-    (255, 224, 000, 000),  # 06 - A:FF R:E0 G:00 B:00 - Red
-    (255, 133, 133, 148),  # 07 - A:FF R:85 G:85 B:94 - Grey
-    (255, 224, 224, 000),  # 08 - A:FF R:E0 G:E0 B:00 - Yellow
-    (255, 162, 29, 000),  # 09 - A:FF R:A2 G:1D B:00 - Dark Red
-    (255, 224, 133, 000),  # 10 - A:FF R:E0 G:85 B:00 - Orange
-    (255, 224, 000, 148),  # 11 - A:FF R:E0 G:00 B:94 - Pink
-    (255, 000, 000, 217),  # 12 - A:FF R:00 G:00 B:D9 - Blue
-    (255, 62, 195, 217),  # 13 - A:FF R:3E G:C3 B:D9 - Aqua
-    (255, 224, 224, 217),  # 14 - A:FF R:E0 G:E0 B:D9 - White
-    (255, 91, 162, 69)   # 15 - A:FF R:5B G:A2 B:45 - Dark Green
-    ],
-    [  # Palette for map 2
-    (255, 000, 000, 000),  # 00 - A:FF R:00 G:00 B:00 - Black
-    (255, 000, 000, 148),  # 01 - A:FF R:00 G:00 B:94 - Dark Blue
-    (255, 000, 224, 000),  # 02 - A:FF R:00 G:E0 B:00 - Green
-    (255, 162, 000, 217),  # 03 - A:FF R:A2 G:00 B:D9 - Purple
-    (255, 224, 162, 148),  # 04 - A:FF R:E0 G:A2 B:94 - Flesh
-    (255, 162, 000, 217),  # 05 - A:FF R:A2 G:00 B:D9 - Purple
-    (255, 224, 000, 000),  # 06 - A:FF R:E0 G:00 B:00 - Red
-    (255, 133, 133, 148),  # 07 - A:FF R:85 G:85 B:94 - Grey
-    (255, 224, 224, 000),  # 08 - A:FF R:E0 G:E0 B:00 - Yellow
-    (255, 162, 133, 000),  # 09 - A:FF R:A2 G:85 B:00 - Gold
-    (255, 224, 133, 000),  # 10 - A:FF R:E0 G:85 B:00 - Orange
-    (255, 224, 000, 148),  # 11 - A:FF R:E0 G:00 B:94 - Pink
-    (255, 000, 000, 217),  # 12 - A:FF R:00 G:00 B:D9 - Blue
-    (255, 62, 195, 217),  # 13 - A:FF R:3E G:C3 B:D9 - Aqua
-    (255, 224, 224, 217),  # 14 - A:FF R:E0 G:E0 B:D9 - White
-    (255, 29, 195, 148)   # 15 - A:FF R:1D G:C3 B:94 - Teal
-    ],
-    # Map 3 Palette (adjusted differently, example)
-    [
-    (255, 000, 000, 000), # 00 - A:FF R:00 G:00 B:00 - Black
-    (255, 91, 62, 69),    # 01 - A:FF R:5B G:3E B:45 - Brown
-    (255, 000, 224, 000), # 02 - A:FF R:00 G:E0 B:00 - Green
-    (255, 162, 133, 000), # 03 - A:FF R:A2 G:85 B:00 - Gold
-    (255, 224, 162, 148), # 04 - A:FF R:E0 G:A2 B:94 - Flesh
-    (255, 162, 000, 217), # 05 - A:FF R:A2 G:00 B:D9 - Purple
-    (255, 224, 000, 000), # 06 - A:FF R:E0 G:00 B:00 - Red
-    (255, 133, 133, 148), # 07 - A:FF R:85 G:85 B:94 - Grey
-    (255, 224, 224, 000), # 08 - A:FF R:E0 G:E0 B:00 - Yellow
-    (255, 162, 29, 000),  # 09 - A:FF R:A2 G:1D B:00 - Dark Red
-    (255, 62, 195, 217),  # 10 - A:FF R:3E G:C3 B:D9 - Aqua
-    (255, 224, 000, 148), # 11 - A:FF R:E0 G:00 B:94 - Pink
-    (255, 000, 000, 217), # 12 - A:FF R:00 G:00 B:D9 - Blue
-    (255, 62, 195, 217),  # 13 - A:FF R:3E G:C3 B:D9 - Aqua
-    (255, 224, 224, 217), # 14 - A:FF R:E0 G:E0 B:D9 - White
-    (255, 224, 29, 148)   # 15 - A:FF R:E0 G:1D B:94 - Bright Pink
-    ],
-    # Map 4 Palette (adjusted differently, example)
-    [
-    (255, 000, 000, 000), # 00 - A:FF R:00 G:00 B:00 - Black
-    (255, 000, 000, 000), # 01 - A:FF R:00 G:00 B:00 - Black
-    (255, 000, 224, 000), # 02 - A:FF R:00 G:E0 B:00 - Green
-    (255, 000, 000, 217), # 03 - A:FF R:00 G:00 B:D9 - Blue
-    (255, 224, 162, 148), # 04 - A:FF R:E0 G:A2 B:94 - Flesh
-    (255, 162, 000, 217), # 05 - A:FF R:A2 G:00 B:D9 - Purple
-    (255, 224, 000, 000), # 06 - A:FF R:E0 G:00 B:00 - Red
-    (255, 133, 133, 148), # 07 - A:FF R:85 G:85 B:94 - Grey
-    (255, 224, 224, 000), # 08 - A:FF R:E0 G:E0 B:00 - Yellow
-    (255, 162, 29, 000),  # 09 - A:FF R:A2 G:1D B:00 - Dark Red
-    (255, 224, 133, 000), # 10 - A:FF R:E0 G:85 B:00 - Orange
-    (255, 224, 000, 148), # 11 - A:FF R:E0 G:00 B:94 - Pink
-    (255, 000, 000, 217), # 12 - A:FF R:00 G:00 B:D9 - Blue
-    (255, 62, 195, 217),  # 13 - A:FF R:3E G:C3 B:D9 - Aqua
-    (255, 224, 224, 217), # 14 - A:FF R:E0 G:E0 B:D9 - White
-    (255, 000, 000, 000)  # 15 - A:FF R:1D G:5B B:94 - Black
-    ]
-]
-
-c3.3i at offset 0x500 where tile is 8x16 bytes is the treasure holder tile.  knowing this, can we find more tiles?
-
-c1.1i contains 32 tiles
-The 1-22, 25, 28, 30 and 32 appear to be walls
-23 and 31 are the keyhole - up one and 4 rows of pixels
-24, 26, 27, and 29 appear to be fire
-
-c2.2i contains 32 tiles
-1, 8, 9 appear to be walls
-2, 3 are empty treasure cavities
-4-6, 10-18, 27-30 are the player sprite
-7 is the open path on the map
-19-22 are the butterfly enemy
-23-26 are the snake enemy
-31-32 are the bird enemy
-
-c3.3i contains 32 tiles
-1-6 are the bird enemy
-7-10 are the snake enemy
-11-13 are more treasure cavities - 12/13 have reward values
-14 is the keyhole - up 6 rows of pixels
-15-22, 27-32 are the player sprite
-23-26 are a white bullet or ghost?  Not sure what this is.
-
-c4.4i contains 32 tiles
-1-2 are the player sprite
-3 is treasure cavity with the chest
-4 is a white bloob?  
-5/6 are the white pillar sides - 5 is left side, and 6 is right side
-7 is the keyhole - up 8 rows of pixels
-8-11 look like a frog or tank?  wtf?
-12-15 are some kind of golden swirl?
-16 is treasure cavity with ring
-17 is treasure cavity with key
-18 is the keyhole - up 10 rows of pixels
-19 is the full keyhole, i think
-20-28 are pieces of the golden chest reward
-29-31 are butterfly enemy
-32 is ... no clue..  something weird looking
-
-c5.5i contains 32 tiles
-1-6 contain treasure cavities with reward values (500, 1000, 1500, 2000, 3000, 4000)
-7-9 - no clue
-10-17 are the golden snake enemy
-18-25 are the bird of paradise enemy
-26-32 are the swastika enemy
-
-
-c1->c5 contain the tile graphics, 32 tiles per file, 80 bytes per tile
-c6/c7 contain the map graphical representation - with some big graphics padding?
-c8 contains the map logical representation - with some big graphics padding?
-c9.9i has the lamp graphics and the tut mask - I think these are all the big treasures at the end of each level.  The final bits of the file are padded FF's, so junk.
-
-in c8.8i, 
-Map Value 0x26 = tile 0x26, if you start from c1.1i and count forward .. 
-Map Value 0x22 = tile 0x22 - the empty cavity, but there's a key in it. Something must have treasure values elsewhere.
-Map Value 0x64/0x65 = tiles 64/65 - the pillars - so the logic fully holds.  
-
-To Do:
-Add correct palettes for each map
-Make display for 1 map at a time
+Big door :
+|Map Width | Bottom Left Door Tile | Row, Col 
+|0         | 0x08, 0x0058          | R10, C11
+|1         | 0x08, 0x00D8          | R10, C27
+|2         | 0x08, 0x0158          | R10, C43
+|3         | 0x08, 0x01D8          | R10, C59
 
 In c6/c7, the Door is always the same byte setups:
 MAP 1:
@@ -190,54 +38,12 @@ MAP 4:
   Logical pos (row=61, col=2): Bytes = F0 00
   Logical pos (row=61, col=3): Bytes = F6 06
 
-So given that - we can treat the 9 door tiles as one unit, and always write the same 9 byte-pairs under the door.
-
-the top of the door 'down' :
-00 00, 00 06, 00 00
-55 06, F6 6E, F6 06
-00 00, F0 66, F0 00
-which maps to tile numbers:
-115, 116, 117
-118, 119, 120
-121, 122, 123
-
-Box  on level 1 is in row 10, column 08 (Tile  98 - 0x62)
-Spn1 on level 1 is in row 05, column 12 (No representation)
-TP1T on level 1 is in row 03, column 13 (No representation)
-TP1B on level 1 is in row 10, column 13 (No representation)
-Key  on level 1 is in row 02, column 16 (Tile 112 - 0x70)
-Spn2 on level 1 is in row 03, column 18 (No representation)
-Ring on level 1 is in row 09, column 22 (Tile 111 - 0x6F)
-Hole on level 1 is in row 10, column 27 (Tile 114 - 0x72)
-Spn3 on level 1 is in row 06, column 28 (No representation)
-Ring on level 1 is in row 08, column 30 (Tile 111 - 0x6F)
-
-
-"m1.1h", 0x0a000 
-"m2.2h", 0x0b000
-"3j.3h", 0x0c000
-"m4.4h", 0x0d000
-"m5.5h", 0x0e000
-"j6.6h", 0x0f000 (Konami version) - I can see the timer banner graphic, the copyright text..
-"a6.6h", 0x0f000 (Stern  version)  - I can see the timer banner graphic, the copyright text..
-
-
-"m1.1h", 0x0a000 OMG - Found the Treasure Array!!!!!!!!  
 Notes:
 Treasure Box on Map 1 - Graphic (0x62) Located at 0x705, with the X/Y coordinates memory addresses (0x6FC,0x6FD), but if I move it, then it only moves the graphic.  The actual treasure remains in the original location, so this must be a split representation - one which shows the tile and one which holds the actual physical location.  In order to move the graphic left and right, it has to be done in 0x08 chunks.  positive increments on the x value moves it to the right.  Positive increments on the y value moves it up, and reducing moves it down.  So this seems to be an absolute pixel location on the screen. If I give it a value outside the map area (0x60 for example), it does display it up in non-scrolling area - so this leads me to believe it's not a 'map' coordinate, just a screen display.   Actual X/Y values are (x038,x010)
 Key on Map 1 - Graphic (0x70) Located at 0x685.  Coordinates at memory addresss (0x67C,0x67D)     Actual X/Y values are (x078,0x50)
 
 When I moved the key, it prevented me from picking it up.  Strange.  Why?
 
-Also, I noticed another key and keyhole on level one in the data - by adding a 0x01 in a specific spot, it 'turned it on' and i was able to see what was intended... both keys worked and both keyholes worked.  So I need to see where the detection logic/pickup logic is being defined.   
-
-Was able to add a ring by poking values into the item list - 0x01 in 0x656, 0x90 in 0x65C, 0x10 in 0x65D, 0x6F in 0x665 - However it's just visible.  I could NOT pick it up.  Something is holding the physical location.   :/
-
-There are 3x blocks of values in m1 and m2 that have similar, but not identical data.  I *THINK* these are the different levels, once you finish the first 4 mazes, then it moves to the next level of difficulty which adds more keyholes and such (which are present but disabled in the lowest level)...
-
-Tiles:
-  - Tiles use a 0-based index
-  - Tiles are stored in c1, c2, c3, c4, c5 roms - 32 tiles per rom - consuming the entire contents of these roms
 Map coordinate system (in CPU/Code roms m1/m2): 
   - XX    coordinates are in 0x08 increments, starting from the bottom of the screen at 0x00 and ending at the top of the map window at 0x55
   - YY YY coordinates are in 0x08 increments, starting from the left side of the screen at 0x0000, and ending at x01F8
@@ -260,37 +66,11 @@ Teleports:
 Spawns:
   - Editor should enclose these with the 'brick' enclosures as a 'block paste' like the 'Door' - both at the Graphics and Physical layer, plus the Code Mapping
   - YY YY XX, where YY YY as above and XX as above
-Editor changes:
-  - Add an 'on hover' data element that shows the XX and YY YY coordinates somewhere ... status bar?  mouse object?  .. as you mouse over each tile to replace - so you can know which coordinate you're about to overwrite
-      - These values are also needed for when we add Special Objects - so we can use the coordinates to populate the Code Layer - may as well make them available
-  - Remove tiles that are never used to 'build' maps - player sprites, monster sprites, death sprites, score sprites, etc.
-  - Add a modifier for each map for 'difficulty' which will be impacted by the next requirement
-  - Load existing known Code Block for current map's level/difficulty
-  - Create 'blocks' for special case objects
-      - Door block = Graphics Layer - 3x3 block of the door tiles; Logical Layer - 3x3 block (interleaved rows) of the special door characters
-      - Spawn block = Graphics Layer - 3x2 or 2x3 block of the spawn tiles; Logical Layer - same block except the central open path; Code Layer - Enter spawn block in proper level/difficulty block
-      - Teleport block = Graphics Layer - 3x1 block of the Tneleport Pillars; Logical Layer - same block size except the central open path; Code Layer - Enter the teleport block in proper level/difficulty block
-  - Modify Editor for Special Items
-      - We need a way to handle Rings, Treasure Boxes, and Keys - so that they are shown as 'empty' or 'with an object' and write the proper Graphics, Logical, and Code Layers.. 
-  - Maybe have a validation step before writing that ensures consistency of the Code Layer
 
 Things to Test
-  - Can the Door be moved to another row!?  every one of the maps has it in the same row placement (different columns, but...)
-  - Can Items/Teleporters be in XX of 0x00 or 0x55?  Does it matter?
+  - Can Items/Teleporters be in XX of 0x00 or 0x55?  NO.
   - Teleports may not need the internal separator block - that may just be spacing and not using up all the possible spots
   - Maybe 8 spawns?  need to test the final block spot.
-
-Also - i'd move the empty box tiles 'next to' their filled couterparts in the tile bar.  Maybe make a section for 'treasures' and include 'populated and unpopulated' - that makes more sense.  
-
-Secondary, if you delete a teleporter from the map, then the paired teleporter should also be removed, as well as the code entries for it.  We may need a set of counters at the top or left or somewhere to show how many of the teleporters, spawners, and treasures (and spawn locations, per below) are placed/still remaining to be placed.
-
-I have done another count of the logic blocks, and there are *FOUR* sets of difficulty, not three.  So we need to expand the range. :)
-
-Another important thought is that the map data (graphics/collision) are shared between the difficulty levels.  As such, we should be 100% sure that if something is edited in a lower difficulty, that the code/object data is copied to the higher difficulty levels so everything stays in sync.  And that way, if an object is enabled at a higher difficulty level, the 'open square' is already in existence in the lower difficulty - we can probably simplify this as 'map is only editable on difficulty 1' and then when you bump the difficulty up, it only lets you 'enable/disable' objects - keys, treasure boxes, rings, and keyholes.  Also - the number of available keys should not be less than the number of keyholes.  It's ok to have more than needed, but it's not ok to have less than needed.  That makes the level unwinable.  Need to check for that situation.
-
-New interesting information - I now know the player start location on the map.  For Map1/Difficulty1, this is at 0x629 and is in the usual YY YY XX form.  Likewise, Map2/Difficulty1 is at x771 in the same YY YY XX form - we can extrapolate it goes in the same place for all the remaining maps/difficulties.  Also, the values following the starting location are respawn points if the player dies.  I assume they're used in some lookup function to find the closest one to the player's corpse to be the next used location.  I don't believe it's a 'checkpoint' system, but that doesn't matter much as we can just edit them as we wish.  There are 'three slots' for respawns immediately after the start location values - So on Map1/Difficulty1, these are at x62C, x62F, and x632.  Immediately after these values is a single byte that holds the count of respawn locations.  On Map1/Difficulty1, this is set to 0x01, because only the x62C value is populated.  On Map2/Difficulty2, it's set to 0x03, because three respawn locations are set.  We should probably bring back a couple of the  tiles to represent the start location (facing forward tile? 0x29?) and maybe the fire (0x17) to show the respawn points - we should label these somehow in the tile setup at the bottom.  These should also be loaded at editor startup/rom load so all the existing ones are shown on the map.
-
-This now means we can be SURE that the Map1/Difficulty1 block starts AT LEAST at 0x629 through 0x765.  I'm still trying to decode the remaining bytes between 0x766 and 0x770.  Still no clue what it does.  Been messing with it for hours.
 
 The game's code keeps a checksum for the title screen's copyright symbol. If the checksum fails (the copyright symbol is altered or removed), the game will not boot. I don't know WHERE this checksum is, but if we ever make a full graphics editor subsystem for the game, we should keep this in mind.
   - This checksum seems to be stored at 0xE25/0xE26 in 3j.3h/3a.3h cpu/code roms.  The Konami (3j) checksum is (14 A3), the Stern (3a) checksum is (1A 4C)
@@ -306,23 +86,10 @@ CE21 BNE   $CE1B  - Loop back to ADDB to add again, clear bits, and decrement co
 CE23 CMPD  #$14A3 - The money shot - are we equal to the checksum?
 CE27 LBNE  $CCBB  - Go off and crash the game if we failed the checksum, otherwise continue standard execution...
 
-Map 1/D1 : 90 00 90 00 06 3C F0 F8 B0 FF B0
-Map 2/D1 : 97 00 93 00 05 5A E0 F0 B0 FF B0
-Map 3/D1 : 90 00 96 00 08 8C E0 F0 B0 FF B0
-Map 4/D1 : 97 00 99 00 08 8C E0 F0 B0 FF E0
-Map 1/D2 : 90 00 90 00 08 3C E0 F0 B0 FF D0
+Map 1/D1 : F0 F8 B0 FF B0
+Map 2/D1 : E0 F0 B0 FF B0
+Map 3/D1 : E0 F0 B0 FF B0
+Map 4/D1 : E0 F0 B0 FF E0
+Map 1/D2 : E0 F0 B0 FF D0
 
-Things needing to be fixed:
-Map Editing - Be able to Adjust the 'Width' of the map - and assume the width based on the Physical Map 'on load'
-  First map should be 'half width' after loading, because of how it's defined in the rom
-  Add method for adjusting map width - being careful that no objects/start/door/respawns/etc can be 'off map' after the adjustment
-Change handling of most special objects 
-  Leave Start and Door alone - They are singular, unique objects and just get moved around as they currently do.
-  Empty boxes, full boxes, keys, keyholes, teleporters, spawners, respawn point editor handling would change
-  Make these so you must right click to remove, and handle them as a single tile zone 
-  Means the user will have to paste a 'spawner block' and then fill in the spawner object afterwards - more work, but easier to handle in code
-  When trying to overwite a game object like a ring or treasure box, it will not overwrite?  At least, the graphic doesn't go away.
-  Ensure that when we are doing the check for valid teleporters that we 'erase' invalid ones from the object list
-  Change handling of spawners to handle the spawner as a separate object from the spawner block - the game does allow for standalone spawners (see level 2 map)
-  Maybe also change handling of teleports to do the same - handle the teleport position separately from the teleporter block
-  The Editor representation of the X Coordinate is 'flipped' in the sense that it's top down instead of bottom up like the code in the rom - we should reverse it
+The Editor representation of the X Coordinate is 'flipped' in the sense that it's top down instead of bottom up like the code in the rom - we should reverse it
